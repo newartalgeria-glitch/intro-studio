@@ -185,7 +185,7 @@ export function slideshow(
     const p = local / fade
     const e = easeInOut(p)
     const prevL = local + eachOf(i - 1)
-    const kind = r.transition
+    const kind = r.transition === 'auto' ? 'fade' : r.transition
     if (kind === 'fade') {
       photo(i - 1, prevL)
       photo(i, local, e)

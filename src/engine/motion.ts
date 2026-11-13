@@ -44,6 +44,11 @@ export function pose(k: Cam, u: number): Pose {
     case 'rack': p.s = 1 + 0.04 * u; p.soft = 1 - easeOut(Math.min(1, u * 2.2)); break
     case 'step': p.s = 1 + 0.03 * Math.floor(u * 4); break
   }
+  // exaggerate: on a small card the subtle moves were barely visible
+  p.s = 1 + (p.s - 1) * 1.7
+  p.x *= 2.2
+  p.y *= 2.2
+  p.r *= 2
   return p
 }
 
@@ -93,7 +98,7 @@ export function drawFx(c: C, fx: Fx, t: number, a: number, pal: Palette) {
         const r = 30 + rand() * 80
         const g = c.createRadialGradient(x, y, 0, x, y, r)
         const col = [pal.frame, pal.hi, pal.soft][i % 3]
-        g.addColorStop(0, rgba(col, 0.3))
+        g.addColorStop(0, rgba(col, 0.45))
         g.addColorStop(1, rgba(col, 0))
         c.fillStyle = g
         c.fillRect(x - r, y - r, r * 2, r * 2)
@@ -105,7 +110,7 @@ export function drawFx(c: C, fx: Fx, t: number, a: number, pal: Palette) {
       const x = ((t * 55) % (W + 800)) - 400
       const g = c.createLinearGradient(x - 300, 0, x + 300, H)
       g.addColorStop(0, 'rgba(255,230,180,0)')
-      g.addColorStop(0.5, 'rgba(255,230,180,0.22)')
+      g.addColorStop(0.5, 'rgba(255,230,180,0.38)')
       g.addColorStop(1, 'rgba(255,230,180,0)')
       c.fillStyle = g
       c.fillRect(0, 0, W, H)
@@ -126,7 +131,7 @@ export function drawFx(c: C, fx: Fx, t: number, a: number, pal: Palette) {
     }
     case 'rays': {
       c.globalCompositeOperation = 'lighter'
-      c.fillStyle = 'rgba(255,225,160,0.06)'
+      c.fillStyle = 'rgba(255,225,160,0.11)'
       for (let i = 0; i < 7; i++) {
         const an = -0.9 + i * 0.22 + Math.sin(t * 0.15 + i) * 0.05
         c.beginPath()
@@ -142,7 +147,7 @@ export function drawFx(c: C, fx: Fx, t: number, a: number, pal: Palette) {
       for (let i = 0; i < 4; i++) {
         const x = ((t * (10 + i * 5) + i * 600) % (W + 1200)) - 600
         const g = c.createRadialGradient(x, H * (0.3 + i * 0.2), 0, x, H * (0.3 + i * 0.2), 520)
-        g.addColorStop(0, 'rgba(235,240,255,0.16)')
+        g.addColorStop(0, 'rgba(235,240,255,0.26)')
         g.addColorStop(1, 'rgba(235,240,255,0)')
         c.fillStyle = g
         c.fillRect(0, 0, W, H)
@@ -231,26 +236,28 @@ export interface Recipe {
   id: string
   name: string
   phases: [Cam, Fx[]][]
+  /** how one photo gives way to the next when the user keeps the default */
+  trans: import('./types').Transition
 }
 export const RECIPES: Recipe[] = [
-  { id: 'cinema', name: 'Classic Cinema', phases: [['push', ['dust', 'warm']], ['panR', ['flare']], ['pull', ['vig']]] },
-  { id: 'nostalgic', name: 'Nostalgic Memory', phases: [['panL', ['grain', 'warm']], ['diagUp', ['leaks']], ['roll', ['bloom']]] },
-  { id: 'epic', name: 'Epic Ascent', phases: [['pedUp', ['rays']], ['orbit', ['sparks']], ['punch', ['dark']]] },
-  { id: 'serene', name: 'Serene', phases: [['breathe', ['mist']], ['panR', ['mist', 'bloom']], ['pull', ['cool']]] },
-  { id: 'modern', name: 'Modern Dynamic', phases: [['step', ['grid']], ['diagDown', ['pulse']], ['panL', ['bright']]] },
-  { id: 'portrait', name: 'Studio Portrait', phases: [['rack', []], ['orbit', ['flare']], ['pedUp', ['bloom']]] },
-  { id: 'explorer', name: "Explorer's Horizon", phases: [['push', ['mist']], ['pedUp', ['rays']], ['panR', ['green', 'gold']]] },
-  { id: 'romance', name: 'Dreamy Romance', phases: [['push', ['bokeh']], ['weave', ['pastel']], ['pull', ['bloom']]] },
-  { id: 'mystery', name: 'Mystery', phases: [['push', ['dark']], ['roll', ['cool', 'vig']], ['pull', ['mist']]] },
-  { id: 'nature', name: 'Living Nature', phases: [['panR', ['dust']], ['diagUp', ['rays']], ['pedDown', ['sparks']]] },
-  { id: 'tech', name: 'Clean Tech', phases: [['panR', ['grid']], ['push', ['pulse']], ['roll', ['bright']]] },
-  { id: 'story', name: "Storyteller's Canvas", phases: [['panR', ['grain']], ['detail', ['vig']], ['pull', ['warm']]] },
-  { id: 'luxury', name: 'Luxury', phases: [['push', ['sparks']], ['orbit', ['flare', 'gold']], ['pedUp', ['dark', 'gold']]] },
-  { id: 'group', name: 'Vibrant Events', phases: [['panR', ['bright']], ['weave', ['leaks']], ['pull', ['bright', 'warm']]] },
-  { id: 'parallax', name: '2.5D Parallax', phases: [['panR', ['dust']], ['push', ['dust', 'mist']], ['orbitRev', ['mist']]] },
-  { id: 'sunset', name: 'Golden Sunset', phases: [['panR', ['rays', 'warm']], ['push', ['orange']], ['pedDown', ['vig', 'warm']]] },
-  { id: 'dawn', name: 'Morning Mist', phases: [['push', ['mist']], ['panR', ['sparks', 'cool']], ['pull', ['bright']]] },
-  { id: 'drama', name: 'Dramatic Contrast', phases: [['punch', ['vig']], ['diagUp', ['mist', 'dark']], ['orbit', ['dark']]] },
-  { id: 'minimal', name: 'Minimalist', phases: [['panR', ['bright']], ['push', ['grid']], ['pull', ['vig']]] },
-  { id: 'festive', name: 'Festive & Joyful', phases: [['push', ['bokeh']], ['orbit', ['sparks']], ['pull', ['bloom', 'warm']]] },
+  { id: 'cinema', name: 'Classic Cinema', trans: 'fade', phases: [['push', ['dust', 'warm']], ['panR', ['flare']], ['pull', ['vig']]] },
+  { id: 'nostalgic', name: 'Nostalgic Memory', trans: 'wipe', phases: [['panL', ['grain', 'warm']], ['diagUp', ['leaks']], ['roll', ['bloom']]] },
+  { id: 'epic', name: 'Epic Ascent', trans: 'zoom', phases: [['pedUp', ['rays']], ['orbit', ['sparks']], ['punch', ['dark']]] },
+  { id: 'serene', name: 'Serene', trans: 'fade', phases: [['breathe', ['mist']], ['panR', ['mist', 'bloom']], ['pull', ['cool']]] },
+  { id: 'modern', name: 'Modern Dynamic', trans: 'slideX', phases: [['step', ['grid']], ['diagDown', ['pulse']], ['panL', ['bright']]] },
+  { id: 'portrait', name: 'Studio Portrait', trans: 'flash', phases: [['rack', []], ['orbit', ['flare']], ['pedUp', ['bloom']]] },
+  { id: 'explorer', name: "Explorer's Horizon", trans: 'slideX', phases: [['push', ['mist']], ['pedUp', ['rays']], ['panR', ['green', 'gold']]] },
+  { id: 'romance', name: 'Dreamy Romance', trans: 'fade', phases: [['push', ['bokeh']], ['weave', ['pastel']], ['pull', ['bloom']]] },
+  { id: 'mystery', name: 'Mystery', trans: 'blinds', phases: [['push', ['dark']], ['roll', ['cool', 'vig']], ['pull', ['mist']]] },
+  { id: 'nature', name: 'Living Nature', trans: 'wipe', phases: [['panR', ['dust']], ['diagUp', ['rays']], ['pedDown', ['sparks']]] },
+  { id: 'tech', name: 'Clean Tech', trans: 'slideY', phases: [['panR', ['grid']], ['push', ['pulse']], ['roll', ['bright']]] },
+  { id: 'story', name: "Storyteller's Canvas", trans: 'wipe', phases: [['panR', ['grain']], ['detail', ['vig']], ['pull', ['warm']]] },
+  { id: 'luxury', name: 'Luxury', trans: 'zoom', phases: [['push', ['sparks']], ['orbit', ['flare', 'gold']], ['pedUp', ['dark', 'gold']]] },
+  { id: 'group', name: 'Vibrant Events', trans: 'slideX', phases: [['panR', ['bright']], ['weave', ['leaks']], ['pull', ['bright', 'warm']]] },
+  { id: 'parallax', name: '2.5D Parallax', trans: 'slideY', phases: [['panR', ['dust']], ['push', ['dust', 'mist']], ['orbitRev', ['mist']]] },
+  { id: 'sunset', name: 'Golden Sunset', trans: 'fade', phases: [['panR', ['rays', 'warm']], ['push', ['orange']], ['pedDown', ['vig', 'warm']]] },
+  { id: 'dawn', name: 'Morning Mist', trans: 'zoom', phases: [['push', ['mist']], ['panR', ['sparks', 'cool']], ['pull', ['bright']]] },
+  { id: 'drama', name: 'Dramatic Contrast', trans: 'flash', phases: [['punch', ['vig']], ['diagUp', ['mist', 'dark']], ['orbit', ['dark']]] },
+  { id: 'minimal', name: 'Minimalist', trans: 'slideY', phases: [['panR', ['bright']], ['push', ['grid']], ['pull', ['vig']]] },
+  { id: 'festive', name: 'Festive & Joyful', trans: 'spin', phases: [['push', ['bokeh']], ['orbit', ['sparks']], ['pull', ['bloom', 'warm']]] },
 ]

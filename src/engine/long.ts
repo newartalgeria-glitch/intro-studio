@@ -35,7 +35,7 @@ interface R4 {
   h: number
 }
 const FULL: Record<Layout, R4> = {
-  card: { x: 200, y: 60, w: 1520, h: 960 },
+  card: { x: 200, y: 90, w: 1520, h: 900 },
   collage: { x: 560, y: 70, w: 800, h: 940 },
   studio: { x: 260, y: 50, w: 1400, h: 780 },
 }
@@ -217,14 +217,14 @@ export function makeLong(d: Design): Template {
           c.fillRect(cx - cw, bottom, cw * 2, ch * 0.36)
         }
       }
-      slideshow(c, r, t, 0, 0, W, H, { durs: r.durs, fade: 1.2, paint })
+      slideshow(c, r.transition === 'auto' ? { ...r, transition: d.recipe.trans } : r, t, 0, 0, W, H, { durs: r.durs, fade: 1.2, paint })
 
       // ---- light & mood of the current phase (cross-faded) ----
       for (let q = 0; q < 3; q++) {
         const lo = (q * T) / 3
         const hi = ((q + 1) * T) / 3
         const w = (q === 0 ? 1 : seg(t, lo - 2, lo + 2)) * (q === 2 ? 1 : 1 - seg(t, hi - 2, hi + 2))
-        for (const fx of d.recipe.phases[q][1]) drawFx(c, fx, t, w * 0.9, pal)
+        for (const fx of d.recipe.phases[q][1]) drawFx(c, fx, t, w, pal)
       }
 
       // ---- text ----

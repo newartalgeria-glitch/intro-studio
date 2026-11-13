@@ -6,6 +6,7 @@ export interface ProjectFile {
   app: 'nadir-photo-album'
   version: 1 | 2
   durs?: number[]
+  length?: number
   wins?: Partial<Wins>
   data: IntroData
   styles: FieldStyles
@@ -40,6 +41,7 @@ export async function parseProject(file: File): Promise<{
   customs: { pic: Pic; thumb: string }[]
   transition: Transition
   durs: number[]
+  length: number
   wins: Partial<Wins>
 }> {
   const j = JSON.parse(await file.text()) as ProjectFile
@@ -54,7 +56,7 @@ export async function parseProject(file: File): Promise<{
     const blob = await (await fetch(url)).blob()
     customs.push(await loadOverlayImage(new File([blob], 'overlay.png', { type: blob.type })))
   }
-  return { data: j.data, styles: j.styles ?? {}, tplId: j.tplId, photos, overlays: j.overlays ?? [], customs, transition: j.transition ?? 'fade', durs: j.durs ?? [], wins: j.wins ?? {} }
+  return { data: j.data, styles: j.styles ?? {}, tplId: j.tplId, photos, overlays: j.overlays ?? [], customs, transition: j.transition ?? 'fade', durs: j.durs ?? [], length: j.length ?? 180, wins: j.wins ?? {} }
 }
 
 export function overlayToDataUrl(p: Pic) {

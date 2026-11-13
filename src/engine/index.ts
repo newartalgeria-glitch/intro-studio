@@ -19,7 +19,7 @@ export { FONTS } from './fonts'
 export { PRESETS, SHAPES, MOTIONS, drawPreset } from './overlays'
 export type { Preset } from './overlays'
 export type { OverlayItem, Transition, Motion, Shape } from './types'
-export const TRANSITIONS: Transition[] = ['fade', 'slideX', 'slideY', 'zoom', 'wipe', 'blinds', 'flash', 'spin']
+export const TRANSITIONS: Transition[] = ['auto', 'fade', 'slideX', 'slideY', 'zoom', 'wipe', 'blinds', 'flash', 'spin']
 
 let stand: Pic[] | null = null
 
@@ -27,6 +27,8 @@ export interface Extras {
   overlays?: OverlayItem[]
   customs?: Record<number, Pic>
   transition?: Transition
+  /** wanted video length in seconds (long templates): photos repeat to fill it. 0 = follow the photos */
+  length?: number
   /** seconds per photo, same order as photos */
   durs?: number[]
   /** user-moved text windows */
@@ -39,7 +41,18 @@ const FIELDS: FieldKey[] = ['headline', 'name1', 'connector', 'name2', 'date', '
 export function makeRenderCtx(data: IntroData, photos: Pic[], styles: FieldStyles = {}, x: Extras = {}): RenderCtx {
   if (!stand) stand = placeholders()
   const real = photos.length > 0
-  const durs = real ? photos.map((_, i) => x.durs?.[i] ?? DEFAULT_PHOTO_SEC) : [5, 5, 5, 5, 5, 5]
+  const base = real ? photos.map((_, i) => x.durs?.[i] ?? DEFAULT_PHOTO_SEC) : [5, 5, 5, 5, 5, 5]
+  const durs = [...base]
+  const want = x.tpl?.kind === 'long' ? x.length ?? 0 : 0
+  if (want > 0) {
+    let sum = durs.reduce((a, b) => a + b, 0)
+    for (let i = 0; sum < want - 0.5 && i < 400; i++) {
+      const d = Math.min(base[i % base.length], want - sum)
+      if (d < 2) break
+      durs.push(d)
+      sum += d
+    }
+  }
   const r: RenderCtx = {
     W: 1920,
     H: 1080,
@@ -47,9 +60,10 @@ export function makeRenderCtx(data: IntroData, photos: Pic[], styles: FieldStyle
     styles,
     overlays: x.overlays ?? [],
     customs: x.customs ?? {},
-    transition: x.transition ?? 'fade',
+    transition: x.transition ?? 'auto',
     pics: real ? photos : stand,
     durs,
+    real: base.length,
     win: {} as Wins,
     cache: new Map(),
   }

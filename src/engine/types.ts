@@ -29,7 +29,7 @@ export type FieldStyles = Partial<Record<FieldKey, FieldStyle>>
 
 export type Shape = 'star' | 'sparkle' | 'heart' | 'bokeh' | 'snow' | 'petal' | 'diamond' | 'leaf' | 'ring' | 'confetti'
 export type Motion = 'fall' | 'rise' | 'twinkle' | 'drift' | 'burst'
-export type Transition = 'fade' | 'slideX' | 'slideY' | 'zoom' | 'wipe' | 'blinds' | 'flash' | 'spin'
+export type Transition = 'auto' | 'fade' | 'slideX' | 'slideY' | 'zoom' | 'wipe' | 'blinds' | 'flash' | 'spin'
 
 export interface OverlayItem {
   uid: number
@@ -63,6 +63,8 @@ export interface RenderCtx {
   pics: Pic[]
   /** seconds each photo stays on screen (long templates) */
   durs: number[]
+  /** how many of durs belong to real, editable photos (the rest repeat them to fill the length) */
+  real: number
   /** visible window [start, end] in seconds of every text line */
   win: Wins
   /** per-(data, photos) cache for pre-rendered pieces such as album pages */

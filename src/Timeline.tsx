@@ -26,6 +26,9 @@ interface Props {
   onField: (f: FieldKey) => void
   onSeek: (t: number) => void
   onDur: (id: number, d: number) => void
+  length: number
+  onLength: (n: number) => void
+  extra: { dur: number; thumb: string }[]
   onDurAll: (d: number) => void
   onRemove: (id: number) => void
   onWin: (f: FieldKey, w: [number, number]) => void
@@ -108,6 +111,19 @@ export function Timeline(p: Props) {
     <div className="tl" dir="ltr">
       <div className="tlbar">
         <small>{t9.tlHint}</small>
+        {p.editable && (
+          <label>
+            <span>{t9.tlLen}</span>
+            <select value={p.length} onChange={(e) => p.onLength(Number(e.target.value))}>
+              <option value={0}>{t9.tlLenAuto}</option>
+              {[1, 2, 3, 4, 5, 8].map((m) => (
+                <option key={m} value={m * 60}>
+                  {m} {t9.tlMin}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
           <span>{t9.tlZoom}</span>
           <input type="range" min={1} max={10} step={0.5} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />
@@ -156,6 +172,11 @@ export function Timeline(p: Props) {
                     />
                   </div>
                 ))}
+              {p.editable &&
+                p.extra.map((c, i) => {
+                  const start = acc + p.extra.slice(0, i).reduce((a, b) => a + b.dur, 0)
+                  return <div key={'x' + i} className="clip pic dim" title={t9.tlLoop} style={{ left: start * px, width: Math.max(4, c.dur * px - 1), backgroundImage: `url(${c.thumb})` }} />
+                })}
               {!p.editable &&
                 p.photos.map((c, i) => (
                   <div key={c.id} className="clip pic dim" style={{ left: i * even * px, width: Math.max(4, even * px - 1), backgroundImage: `url(${c.thumb})` }} />

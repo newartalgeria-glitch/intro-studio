@@ -55,7 +55,8 @@ export default function App() {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [overlays, setOverlays] = useState<OverlayItem[]>([])
   const [customs, setCustoms] = useState<Custom[]>([])
-  const [transition, setTransition] = useState<Transition>('fade')
+  const [transition, setTransition] = useState<Transition>('auto')
+  const [length, setLength] = useState(180)
   const [tplId, setTplId] = useState('wedding:1')
   const [tab, setTab] = useState<Tab>('templates')
   const [wins, setWins] = useState<Partial<Wins>>({})
@@ -101,8 +102,9 @@ export default function App() {
         durs: photos.map((p) => p.dur),
         wins,
         tpl,
+        length,
       }),
-    [data, photos, styles, overlays, customs, transition, wins, tpl],
+    [data, photos, styles, overlays, customs, transition, wins, tpl, length],
   )
   const occ = tpl.occasion
   const dur = tpl.duration(rc)
@@ -230,7 +232,8 @@ export default function App() {
     setPhotos([])
     setOverlays([])
     setCustoms([])
-    setTransition('fade')
+    setTransition('auto')
+    setLength(180)
     setTplId('wedding:1')
     setOccTab('wedding')
     setWins({})
@@ -243,6 +246,7 @@ export default function App() {
       version: 2,
       durs: photos.map((p) => p.dur),
       wins,
+      length,
       data,
       styles,
       tplId,
@@ -265,6 +269,7 @@ export default function App() {
       setTplId(known ? id : 'wedding:1')
       setOccTab(known ? known.occasion : 'wedding')
       setWins(p.wins)
+      setLength(p.length)
       setPhotos(p.photos.map((x, i) => ({ id: idRef.current++, ...x, dur: p.durs[i] ?? DEFAULT_PHOTO_SEC })))
       const cs = p.customs.map((x) => ({ id: idRef.current++, ...x }))
       setCustoms(cs)
@@ -370,7 +375,7 @@ export default function App() {
     ['motion', t9.tabMotion],
   ]
   const buildRc = useCallback(
-    (tp: (typeof TEMPLATES)[number]) => makeRenderCtx(data, photos.map((p) => p.pic), styles, { transition, durs: photos.map((p) => p.dur), tpl: tp }),
+    (tp: (typeof TEMPLATES)[number]) => makeRenderCtx(data, photos.map((p) => p.pic), styles, { transition, durs: photos.map((p) => p.dur), tpl: tp, length: 0 }),
     [data, photos, styles, transition],
   )
 
@@ -707,6 +712,9 @@ export default function App() {
           onField={setField}
           onSeek={seek}
           onDur={setDur}
+          length={length}
+          onLength={setLength}
+          extra={rc.durs.slice(rc.real).map((d, i) => ({ dur: d, thumb: photos[(rc.real + i) % Math.max(1, photos.length)]?.thumb ?? '' }))}
           onDurAll={(d) => setPhotos((l) => l.map((p) => ({ ...p, dur: d })))}
           onRemove={(id) => setPhotos((l) => l.filter((p) => p.id !== id))}
           onWin={(f, w) => setWins((x) => ({ ...x, [f]: w }))}
