@@ -43,6 +43,8 @@ export interface OverlayItem {
   scale: number
 }
 
+export type Wins = Record<FieldKey, [number, number]>
+
 export interface Pic {
   src: CanvasImageSource
   w: number
@@ -59,6 +61,10 @@ export interface RenderCtx {
   customs: Record<number, Pic>
   transition: Transition
   pics: Pic[]
+  /** seconds each photo stays on screen (long templates) */
+  durs: number[]
+  /** visible window [start, end] in seconds of every text line */
+  win: Wins
   /** per-(data, photos) cache for pre-rendered pieces such as album pages */
   cache: Map<string, HTMLCanvasElement>
 }
@@ -71,6 +77,13 @@ export interface Template {
   variant: number
   /** three colours for the little swatch next to the thumbnail */
   swatch: [string, string, string]
+  /** 'long' = timeline-driven (photos + text windows); 'legacy' = fixed short animation */
+  kind: 'long' | 'legacy'
+  /** number inside its category, 1-based */
+  num: number
+  /** general only: the occasion this design was made for */
+  tag?: string
+  defaultWin(r: RenderCtx): Wins
   duration(r: RenderCtx): number
   render(c: CanvasRenderingContext2D, t: number, r: RenderCtx): void
 }

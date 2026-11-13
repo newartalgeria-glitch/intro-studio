@@ -123,3 +123,51 @@ export function isLight(hex: string) {
   const l = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
   return l > 0.62
 }
+
+/** Two more palettes per occasion, so the long templates have five looks each. */
+export const EXTRA: Record<Occasion, Palette[]> = {
+  wedding: [
+    P('#fdf0ec', '#f3d6cf', '#c98f7a', '#9a5a48', '#e0a79a', '#a77767', '#4a2a22', '#fff7f2', '#9a5a48', 'aref-ruqaa'),
+    P('#dfe8dc', '#b9cdb4', '#8f7a3a', '#4f6a45', '#a8c29e', '#5f7a55', '#27361f', '#f5f8f1', '#4f6a45', 'amiri'),
+  ],
+  engagement: [
+    P('#1c1a1a', '#080707', '#e8cf9a', '#f1dcae', '#fff4dd', '#d9c08a', '#f6ecd8', '#f4ecdd', '#1c1a1a', 'markazi-text'),
+    P('#f9e3e8', '#efc3cf', '#c26a82', '#8f3050', '#e394aa', '#9d5568', '#4a1b2c', '#fff4f6', '#a84a66', 'amiri'),
+  ],
+  babyBoy: [
+    P('#e4f6f1', '#bfe6dd', '#5fb3a2', '#2b7d6e', '#8fd1c3', '#4f8f83', '#1a4a42', '#f6fffc', '#3f9a89', 'cairo'),
+    P('#fff7df', '#fde7a8', '#e0b03c', '#3b6ea5', '#f6cf6a', '#7a8fa8', '#2a3f5c', '#fffdf3', '#3b6ea5', 'tajawal'),
+  ],
+  babyGirl: [
+    P('#efe6fa', '#d8c6f2', '#9b7bd0', '#6a45a8', '#c5aaf0', '#8a6bb8', '#34205a', '#fbf8ff', '#8a62c4', 'amiri'),
+    P('#e8f7f2', '#cdeee3', '#e58fa8', '#c2507a', '#f4a8c0', '#5e9c8a', '#27483f', '#f8fffc', '#e58fa8', 'cairo'),
+  ],
+  graduation: [
+    P('#0f3d2b', '#04160f', '#e3c26a', '#e3c26a', '#fff0b8', '#bcd9c6', '#eaf6ee', '#f1f5ee', '#0f3d2b', 'amiri'),
+    P('#2a1450', '#0d0620', '#e0b84c', '#f1d58a', '#fff3c4', '#cbb5ee', '#f3ecff', '#f4effa', '#2a1450', 'markazi-text'),
+  ],
+  family: [
+    P('#fff0e3', '#f8d4b8', '#d9814a', '#a4521f', '#eca572', '#9c6a45', '#4a2a14', '#fff8f0', '#a4521f', 'el-messiri'),
+    P('#e6edf2', '#c3d2de', '#4d7391', '#27506f', '#86a9c3', '#587489', '#14303f', '#f7fafc', '#27506f', 'cairo'),
+  ],
+  formal: [
+    P('#073b30', '#021510', '#cdb26a', '#f3e8c4', '#ffffff', '#cdb26a', '#f3e8c4', '#eef0e8', '#073b30', 'amiri'),
+    P('#f7f7f9', '#dfe1e7', '#8d94a6', '#2b3140', '#8d94a6', '#586073', '#1c2230', '#ffffff', '#2b3140', 'playfair-display'),
+  ],
+  artistic: [
+    P('#2a0f3d', '#0f0418', '#ff9a5c', '#ffc08a', '#fff0dc', '#ff7aa8', '#fff3ea', '#f8eee6', '#2a0f3d', 'rakkas'),
+    P('#e7f3f1', '#c3e1dc', '#1f8f84', '#0e5f57', '#5fc2b7', '#3f827a', '#0a3a35', '#f8fffd', '#0e5f57', 'noto-kufi-arabic'),
+  ],
+  birthday: [
+    P('#d8efff', '#fbe6ff', '#ff5f8a', '#d6336c', '#ffa1bd', '#4a7fc0', '#1c3a66', '#ffffff', '#d6336c', 'tajawal'),
+    P('#12204a', '#060b20', '#ffcf4a', '#ffe08a', '#fff6d2', '#ff9fc8', '#f3f6ff', '#f4f6fb', '#12204a', 'cairo'),
+  ],
+  love: [
+    P('#1a0508', '#060102', '#e0344f', '#ff8aa0', '#ffffff', '#e0344f', '#ffe9ee', '#f7e8ea', '#3a0a14', 'great-vibes'),
+    P('#f7eaf3', '#e3c7de', '#b5649a', '#85356f', '#d796c3', '#8f5a7f', '#3f1a38', '#fff6fb', '#85356f', 'parisienne'),
+  ],
+  general: [
+    P('#0f3d36', '#041512', '#e0a22a', '#f1d58a', '#fff1c4', '#8fd0c6', '#eafaf6', '#eef3ef', '#0f3d36', 'reem-kufi'),
+    P('#eef1f4', '#d3dae2', '#3f6c9a', '#1f3d5c', '#7fa6cc', '#5b7690', '#142a40', '#fbfcfd', '#3f6c9a', 'cairo'),
+  ],
+}

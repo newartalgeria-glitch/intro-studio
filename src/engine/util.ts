@@ -1,4 +1,4 @@
-import type { FieldKey, FieldStyles, Pic, RenderCtx } from './types'
+import type { FieldKey, FieldStyles, Pic, RenderCtx, Wins } from './types'
 import { FONTS, stackFor } from './fonts'
 
 export const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v))
@@ -32,6 +32,26 @@ export const setActiveStyles = (s: FieldStyles) => {
   active = s
 }
 
+let times: { t: number; win: Partial<Wins> } = { t: 0, win: {} }
+export const setActiveTimes = (t: number, win: Partial<Wins>) => {
+  times = { t, win }
+}
+/** 0..1 visibility of a text window at time t (fade in 0.7 s, fade out 0.7 s) */
+export const gate = (w: [number, number] | undefined, t: number) =>
+  w ? easeOut(seg(t, w[0], w[0] + 0.7)) * (1 - easeOut(seg(t, w[1] - 0.7, w[1]))) : 1
+
+export interface Hit {
+  f: FieldKey
+  x: number
+  y: number
+  w: number
+  h: number
+}
+let hits: Hit[] | null = null
+export const setHitSink = (h: Hit[] | null) => {
+  hits = h
+}
+
 export interface TextOpts {
   /** which data field this line shows, so user style overrides apply */
   f?: FieldKey
@@ -48,6 +68,8 @@ export interface TextOpts {
 /** Draws one line of text; returns the used font size. */
 export function text(c: Ctx, s: string, x: number, y: number, o: TextOpts): number {
   if (!s) return o.size
+  const g = o.f ? gate(times.win[o.f], times.t) : 1
+  if (g < 0.004) return o.size
   const st = o.f ? active[o.f] : undefined
   if (st) {
     x += st.dx ?? 0
@@ -80,7 +102,17 @@ export function text(c: Ctx, s: string, x: number, y: number, o: TextOpts): numb
     }
   }
   c.fillStyle = o.fill
+  const ga = c.globalAlpha
+  c.globalAlpha = ga * g
   c.fillText(s, x, y)
+  c.globalAlpha = ga
+  if (hits && o.f) {
+    const w = c.measureText(s).width
+    const m = c.getTransform()
+    const al = o.align ?? 'center'
+    const x0 = al === 'center' ? x - w / 2 : al === 'left' || al === 'start' ? x : x - w
+    hits.push({ f: o.f, x: m.a * x0 + m.e, y: m.d * (y - size * 0.9) + m.f, w: m.a * w, h: m.d * size * 1.25 })
+  }
   if ('letterSpacing' in cc) cc.letterSpacing = '0px'
   return size
 }
@@ -117,7 +149,7 @@ export function slideshow(
   y: number,
   w: number,
   h: number,
-  opts: { each?: number; fade?: number; first?: number; start?: number; alpha?: number } = {},
+  opts: { each?: number; fade?: number; first?: number; start?: number; alpha?: number; durs?: number[] } = {},
 ) {
   const each = opts.each ?? 3
   const fade = opts.fade ?? 0.9
@@ -125,11 +157,22 @@ export function slideshow(
   const first = opts.first ?? 0
   const A = opts.alpha ?? 1
   const lt = Math.max(0, t - start)
-  const i = Math.floor(lt / each)
-  const local = lt - i * each
+  const ds = opts.durs
+  const eachOf = (k: number) => (ds ? ds[Math.min(Math.max(k, 0), ds.length - 1)] ?? each : each)
+  let i: number
+  let local: number
+  if (ds) {
+    let acc = 0
+    i = 0
+    while (i < ds.length - 1 && lt >= acc + ds[i]) acc += ds[i++]
+    local = lt - acc
+  } else {
+    i = Math.floor(lt / each)
+    local = lt - i * each
+  }
   const photo = (idx: number, l: number, a = 1) => {
     c.globalAlpha = A * a
-    const p = clamp(l / (each + fade))
+    const p = clamp(l / (eachOf(idx) + fade))
     const dir = idx % 2 === 0 ? 1 : -1
     cover(c, pic(r, idx + first), x, y, w, h, 1.04 + 0.08 * p, dir * (p - 0.5) * 0.6, -0.3)
   }
@@ -140,7 +183,7 @@ export function slideshow(
   if (i > 0 && local < fade) {
     const p = local / fade
     const e = easeInOut(p)
-    const prevL = local + each
+    const prevL = local + eachOf(i - 1)
     const kind = r.transition
     if (kind === 'fade') {
       photo(i - 1, prevL)

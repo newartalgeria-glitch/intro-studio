@@ -1,33 +1,91 @@
 import type { Template } from './types'
-import { OCCASIONS, PALETTES } from './palettes'
+import { EXTRA, OCCASIONS, PALETTES } from './palettes'
+import type { Occasion } from './palettes'
 import { arch } from './layouts/arch'
 import { album } from './layouts/album'
 import { panels } from './layouts/panels'
 import { cinema } from './layouts/cinema'
 import { polaroid } from './layouts/polaroid'
+import type { Base, Pattern } from './scenes'
+import type { SpriteId } from './sprites'
+import { FRAMES } from './frames'
+import { makeLong } from './long'
+import type { Side } from './long'
 
 export const LAYOUTS = [arch, album, panels, cinema, polaroid]
 export const LAYOUT_IDS = LAYOUTS.map((l) => l.id)
 
-/** 11 occasions x 5 layouts x 3 palettes = 165 templates. */
-export const CATALOG: Template[] = OCCASIONS.flatMap((occ) =>
-  PALETTES[occ].flatMap((pal, variant) =>
-    LAYOUTS.map((l): Template => ({
-      id: `${occ}:${l.id}:${variant}`,
-      occasion: occ,
+/** What each occasion's backgrounds are made of. */
+const THEME: Record<string, { sprites: SpriteId[]; bases: Base[] }> = {
+  wedding: { sprites: ['flower', 'ring', 'heart', 'leaf', 'sparkle', 'rose', 'petal'], bases: ['grad', 'radial', 'diamonds', 'rays', 'stripes'] },
+  engagement: { sprites: ['ring', 'diamond', 'heart', 'sparkle', 'bow', 'star', 'rose'], bases: ['radial', 'grad', 'rays', 'diamonds', 'stripes'] },
+  babyBoy: { sprites: ['cloud', 'star', 'balloon', 'crescent', 'footprint', 'sparkle', 'dot'], bases: ['bands', 'grad', 'radial', 'stripes', 'rays'] },
+  babyGirl: { sprites: ['bow', 'heart', 'butterfly', 'flower', 'cloud', 'balloon', 'star'], bases: ['bands', 'grad', 'radial', 'stripes', 'diamonds'] },
+  graduation: { sprites: ['cap', 'scroll', 'laurel', 'star', 'book', 'sparkle', 'crest'], bases: ['radial', 'grad', 'rays', 'stripes', 'diamonds'] },
+  family: { sprites: ['house', 'tree', 'heart', 'sun', 'leaf', 'flower', 'footprint'], bases: ['bands', 'grad', 'radial', 'stripes', 'diamonds'] },
+  formal: { sprites: ['laurel', 'star', 'crest', 'diamond', 'sparkle', 'scroll', 'ring'], bases: ['radial', 'grad', 'stripes', 'diamonds', 'rays'] },
+  artistic: { sprites: ['splash', 'palette', 'note', 'star', 'sparkle', 'diamond', 'dot'], bases: ['grad', 'radial', 'bands', 'rays', 'stripes'] },
+  birthday: { sprites: ['balloon', 'cake', 'gift', 'hat', 'star', 'sparkle', 'dot'], bases: ['bands', 'grad', 'radial', 'rays', 'stripes'] },
+  love: { sprites: ['heart', 'rose', 'butterfly', 'sparkle', 'petal', 'ring', 'flower'], bases: ['radial', 'grad', 'rays', 'diamonds', 'bands'] },
+}
+const PATTERNS: Pattern[] = ['rain', 'rise', 'corners', 'border', 'scatter', 'orbit', 'sides', 'wave']
+const SIDES: Side[] = ['R', 'L', 'T', 'C']
+
+/** 10 occasions x 15 designs. Each differs in background, motif, motion, frame shape and text position, not only colour. */
+const LONG: Template[] = Object.keys(THEME).flatMap((occ, oi) => {
+  const th = THEME[occ]
+  const pals = [...PALETTES[occ as Occasion], ...EXTRA[occ as Occasion]]
+  return Array.from({ length: 15 }, (_, i) => {
+    const s0 = (i * 2 + oi) % th.sprites.length
+    const sprites = [0, 1, 2, 3].map((k) => th.sprites[(s0 + k) % th.sprites.length])
+    return makeLong({
+      occ,
+      num: i + 1,
+      pal: pals[(i * 2 + oi) % pals.length],
+      frame: FRAMES[(i * 4 + oi * 3) % FRAMES.length],
+      side: SIDES[(i * 3 + oi) % 4],
+      scene: { base: th.bases[(i * 2 + oi) % th.bases.length], pattern: PATTERNS[(i * 3 + oi * 2) % PATTERNS.length], sprites, seed: oi * 40 + i + 1 },
+    })
+  })
+})
+
+/** The 22 short designs kept from the first version (two from each old category) live in "general". */
+const LEGACY: Template[] = OCCASIONS.flatMap((occ, k) =>
+  [
+    [k % 5, k % 3],
+    [(k + 2) % 5, (k + 1) % 3],
+  ].map(([li, vi], n): Template => {
+    const l = LAYOUTS[li]
+    const pal = PALETTES[occ][vi]
+    return {
+      id: `general:${occ}:${l.id}:${vi}`,
+      occasion: 'general',
       layout: l.id,
-      variant,
+      variant: vi,
       swatch: [pal.bg0, pal.frame, pal.name],
+      kind: 'legacy',
+      num: k * 2 + n + 1,
+      tag: occ,
+      defaultWin: (r) => {
+        const d = l.duration(r)
+        return { headline: [0, d], name1: [0, d], connector: [0, d], name2: [0, d], date: [0, d], place: [0, d], footer: [0, d] }
+      },
       duration: l.duration,
       render: l.make(pal),
-    })),
-  ),
+    }
+  }),
 )
 
-/** Ids used by the first version of the tool. */
-export const LEGACY_IDS: Record<string, string> = {
-  gold: 'wedding:arch:0',
-  album: 'wedding:album:0',
-  modern: 'general:panels:1',
-  formal: 'formal:cinema:0',
+export const CATALOG: Template[] = [...LONG, ...LEGACY]
+
+/** Ids from older versions of the tool map to the closest template that still exists. */
+export function resolveId(id: string): string {
+  if (CATALOG.some((t) => t.id === id)) return id
+  const old: Record<string, string> = { gold: 'wedding:arch:0', album: 'wedding:album:0', modern: 'general:panels:1', formal: 'formal:cinema:0' }
+  const full = old[id] ?? id
+  const [occ, lay, v] = full.split(':')
+  const hit = CATALOG.find((t) => t.kind === 'legacy' && t.tag === occ && t.layout === lay && String(t.variant) === v)
+  if (hit) return hit.id
+  const first = CATALOG.find((t) => t.occasion === occ)
+  return first ? first.id : 'wedding:1'
 }

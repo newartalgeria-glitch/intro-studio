@@ -1,10 +1,12 @@
-import type { FieldStyles, IntroData, OverlayItem, Transition } from './engine'
+import type { FieldStyles, IntroData, OverlayItem, Transition, Wins } from './engine'
 import { loadOverlayImage, loadPhoto } from './engine/pics'
 import type { Pic } from './engine'
 
 export interface ProjectFile {
   app: 'nadir-photo-album'
-  version: 1
+  version: 1 | 2
+  durs?: number[]
+  wins?: Partial<Wins>
   data: IntroData
   styles: FieldStyles
   tplId: string
@@ -37,6 +39,8 @@ export async function parseProject(file: File): Promise<{
   overlays: OverlayItem[]
   customs: { pic: Pic; thumb: string }[]
   transition: Transition
+  durs: number[]
+  wins: Partial<Wins>
 }> {
   const j = JSON.parse(await file.text()) as ProjectFile
   if (j.app !== 'nadir-photo-album' || !j.data) throw new Error('bad project')
@@ -50,7 +54,7 @@ export async function parseProject(file: File): Promise<{
     const blob = await (await fetch(url)).blob()
     customs.push(await loadOverlayImage(new File([blob], 'overlay.png', { type: blob.type })))
   }
-  return { data: j.data, styles: j.styles ?? {}, tplId: j.tplId, photos, overlays: j.overlays ?? [], customs, transition: j.transition ?? 'fade' }
+  return { data: j.data, styles: j.styles ?? {}, tplId: j.tplId, photos, overlays: j.overlays ?? [], customs, transition: j.transition ?? 'fade', durs: j.durs ?? [], wins: j.wins ?? {} }
 }
 
 export function overlayToDataUrl(p: Pic) {

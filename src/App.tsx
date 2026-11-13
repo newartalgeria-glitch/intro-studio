@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FONTS, LAYOUT_IDS, LEGACY_IDS, OCCASIONS, PRESETS, TEMPLATES, TRANSITIONS, drawPreset, loadFonts, makeRenderCtx, renderFrame } from './engine'
-import type { FieldKey, FieldStyle, FieldStyles, IntroData, Kind, Motion, OverlayItem, Pic, Transition } from './engine'
+import { DEFAULT_PHOTO_SEC, FONTS, OCCASIONS, PRESETS, TEMPLATES, TRANSITIONS, drawPreset, loadFonts, makeRenderCtx, renderFrame, resolveId, setHitSink } from './engine'
+import type { FieldKey, FieldStyle, FieldStyles, Hit, IntroData, Kind, Motion, OverlayItem, Pic, Transition, Wins } from './engine'
+import { Timeline } from './Timeline'
 import { loadOverlayImage, loadPhoto } from './engine/pics'
 import { exportMp4, webCodecsAvailable } from './export/encode'
 import { DICT, LANGS, sample } from './i18n'
@@ -12,7 +13,10 @@ interface Photo {
   id: number
   pic: Pic
   thumb: string
+  dur: number
 }
+type Tab = 'templates' | 'text' | 'photos' | 'overlays' | 'motion'
+const MAX_PHOTOS = 40
 interface Custom {
   id: number
   pic: Pic
@@ -52,7 +56,9 @@ export default function App() {
   const [overlays, setOverlays] = useState<OverlayItem[]>([])
   const [customs, setCustoms] = useState<Custom[]>([])
   const [transition, setTransition] = useState<Transition>('fade')
-  const [tplId, setTplId] = useState('wedding:arch:0')
+  const [tplId, setTplId] = useState('wedding:1')
+  const [tab, setTab] = useState<Tab>('templates')
+  const [wins, setWins] = useState<Partial<Wins>>({})
   const [occTab, setOccTab] = useState('wedding')
   const [field, setField] = useState<FieldKey>('name1')
   const [ready, setReady] = useState(false)
@@ -63,6 +69,7 @@ export default function App() {
   const [progress, setProgress] = useState(0)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [drag, setDrag] = useState(false)
+  const [allSec, setAllSec] = useState(DEFAULT_PHOTO_SEC)
 
   const stage = useRef<HTMLCanvasElement>(null)
   const idRef = useRef(1)
@@ -84,16 +91,19 @@ export default function App() {
     remember('npa_theme', theme)
   }, [theme])
 
+  const tpl = TEMPLATES.find((x) => x.id === tplId) ?? TEMPLATES[0]
   const rc = useMemo(
     () =>
       makeRenderCtx(data, photos.map((p) => p.pic), styles, {
         overlays,
         customs: Object.fromEntries(customs.map((c) => [c.id, c.pic])),
         transition,
+        durs: photos.map((p) => p.dur),
+        wins,
+        tpl,
       }),
-    [data, photos, styles, overlays, customs, transition],
+    [data, photos, styles, overlays, customs, transition, wins, tpl],
   )
-  const tpl = TEMPLATES.find((x) => x.id === tplId) ?? TEMPLATES[0]
   const occ = tpl.occasion
   const dur = tpl.duration(rc)
 
@@ -106,16 +116,21 @@ export default function App() {
 
   useEffect(() => {
     if (ready) {
-      const s = Math.min(dur * 0.7, dur - 1)
+      const s = tpl.kind === 'long' ? Math.min(8, dur - 1) : Math.min(dur * 0.7, dur - 1)
       tRef.current = s
       setT(s)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, tplId])
 
+  const hits = useRef<Hit[]>([])
   const draw = useCallback(() => {
     if (!ready || !stage.current) return
+    const sink: Hit[] = []
+    setHitSink(sink)
     renderFrame(stage.current, tpl, rc, tRef.current)
+    setHitSink(null)
+    hits.current = sink
   }, [ready, tpl, rc])
   useEffect(draw, [draw, t])
 
@@ -181,12 +196,12 @@ export default function App() {
 
   const addFiles = async (files: FileList | File[]) => {
     const list = Array.from(files).filter((f) => f.type.startsWith('image/'))
-    const room = 8 - photos.length
+    const room = MAX_PHOTOS - photos.length
     const out: Photo[] = []
     for (const f of list.slice(0, Math.max(0, room))) {
       try {
         const r = await loadPhoto(f)
-        out.push({ id: idRef.current++, ...r })
+        out.push({ id: idRef.current++, ...r, dur: DEFAULT_PHOTO_SEC })
       } catch {
         /* skip unreadable file */
       }
@@ -212,15 +227,18 @@ export default function App() {
     setOverlays([])
     setCustoms([])
     setTransition('fade')
-    setTplId('wedding:arch:0')
+    setTplId('wedding:1')
     setOccTab('wedding')
+    setWins({})
     setMsg(null)
   }
 
   const saveProject = () => {
     const file: ProjectFile = {
       app: 'nadir-photo-album',
-      version: 1,
+      version: 2,
+      durs: photos.map((p) => p.dur),
+      wins,
       data,
       styles,
       tplId,
@@ -238,11 +256,12 @@ export default function App() {
       const p = await parseProject(f)
       setData(p.data)
       setStyles(p.styles)
-      const id = LEGACY_IDS[p.tplId] ?? p.tplId
+      const id = resolveId(p.tplId)
       const known = TEMPLATES.find((x) => x.id === id)
-      setTplId(known ? id : 'wedding:arch:0')
+      setTplId(known ? id : 'wedding:1')
       setOccTab(known ? known.occasion : 'wedding')
-      setPhotos(p.photos.map((x) => ({ id: idRef.current++, ...x })))
+      setWins(p.wins)
+      setPhotos(p.photos.map((x, i) => ({ id: idRef.current++, ...x, dur: p.durs[i] ?? DEFAULT_PHOTO_SEC })))
       const cs = p.customs.map((x) => ({ id: idRef.current++, ...x }))
       setCustoms(cs)
       setOverlays(
@@ -257,8 +276,13 @@ export default function App() {
     }
   }
 
+  /** One overlay at a time: choosing a new one replaces the previous; choosing the active one again clears it. */
   const addOverlay = (o: Omit<OverlayItem, 'uid' | 'opacity' | 'scale'>) =>
-    setOverlays((l) => [...l, { uid: uidRef.current++, opacity: 0.9, scale: 1, ...o }])
+    setOverlays((l) => {
+      const cur = l[0]
+      if (cur && cur.preset === o.preset && cur.custom === o.custom) return []
+      return [{ uid: uidRef.current++, opacity: cur?.opacity ?? 0.9, scale: cur?.scale ?? 1, ...o }]
+    })
   const patchOverlay = (uid: number, patch: Partial<OverlayItem>) => setOverlays((l) => l.map((o) => (o.uid === uid ? { ...o, ...patch } : o)))
   const addCustoms = async (files: FileList) => {
     const out: Custom[] = []
@@ -313,6 +337,39 @@ export default function App() {
       </option>
     ))
 
+  const hitAt = (e: React.PointerEvent) => {
+    const cv = stage.current
+    if (!cv) return null
+    const b = cv.getBoundingClientRect()
+    const px = ((e.clientX - b.left) * cv.width) / b.width
+    const py = ((e.clientY - b.top) * cv.height) / b.height
+    for (let i = hits.current.length - 1; i >= 0; i--) {
+      const h = hits.current[i]
+      if (px >= h.x && px <= h.x + h.w && py >= h.y && py <= h.y + h.h) return h
+    }
+    return null
+  }
+  const dragText = useRef<{ f: FieldKey; x: number; y: number; dx: number; dy: number } | null>(null)
+
+  const seek = (v: number) => {
+    setPlaying(false)
+    tRef.current = Math.min(Math.max(0, v), dur)
+    setT(tRef.current)
+  }
+  const setDur = (id: number, d: number) => setPhotos((l) => l.map((p) => (p.id === id ? { ...p, dur: d } : p)))
+  const long = tpl.kind === 'long'
+  const tabs: [Tab, string][] = [
+    ['templates', t9.tabTemplates],
+    ['text', t9.tabText],
+    ['photos', t9.tabPhotos],
+    ['overlays', t9.tabOverlays],
+    ['motion', t9.tabMotion],
+  ]
+  const buildRc = useCallback(
+    (tp: (typeof TEMPLATES)[number]) => makeRenderCtx(data, photos.map((p) => p.pic), styles, { transition, durs: photos.map((p) => p.dur), tpl: tp }),
+    [data, photos, styles, transition],
+  )
+
   return (
     <div className="app">
       <header className="top">
@@ -350,254 +407,267 @@ export default function App() {
       </header>
 
       <aside className="panel">
-        <div className="seg" role="tablist">
-          {(['intro', 'outro'] as Kind[]).map((k) => (
-            <button key={k} role="tab" aria-selected={data.kind === k} onClick={() => setKind(k)}>
-              {t9[k]}
+        <div className="tabs" role="tablist">
+          {tabs.map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>
+              {label}
             </button>
           ))}
         </div>
+        <div className="pane">
+          {tab === 'templates' && (
+            <>
+              <div className="seg" role="tablist">
+                {(['intro', 'outro'] as Kind[]).map((k) => (
+                  <button key={k} role="tab" aria-selected={data.kind === k} onClick={() => setKind(k)}>
+                    {t9[k]}
+                  </button>
+                ))}
+              </div>
+              <TemplateStrip build={buildRc} active={tplId} occ={occTab} onOcc={setOccTab} onPick={pickTemplate} ready={ready} t9={t9} />
+            </>
+          )}
 
-        <label className="f">
-          <span>{t9.headline}</span>
-          <input value={data.headline} onChange={set('headline')} />
-        </label>
-        <div className="row3">
-          <label className="f">
-            <span>{t9.name1}</span>
-            <input value={data.name1} onChange={set('name1')} />
-          </label>
-          <label className="f narrow">
-            <span>{t9.connector}</span>
-            <input value={data.connector} onChange={set('connector')} />
-          </label>
-          <label className="f">
-            <span>{t9.name2}</span>
-            <input value={data.name2} onChange={set('name2')} />
-          </label>
-        </div>
-        <label className="f">
-          <span>{t9.date}</span>
-          <input value={data.date} onChange={set('date')} />
-        </label>
-        <label className="f">
-          <span>{t9.place}</span>
-          <input value={data.place} onChange={set('place')} />
-        </label>
-        <label className="f">
-          <span>{t9.footer}</span>
-          <input value={data.footer} onChange={set('footer')} />
-        </label>
+          {tab === 'text' && (
+            <>
+              <div className="chips" role="tablist">
+                {FIELDS.map((k) => (
+                  <button key={k} role="tab" aria-selected={field === k} onClick={() => setField(k)}>
+                    {t9[k].replace(/\s*\(.*\)/, '')}
+                  </button>
+                ))}
+              </div>
+              <label className="f">
+                <span>{t9[field]}</span>
+                <input value={data[field]} onChange={set(field)} />
+              </label>
+              <label className="f">
+                <span>{t9.font}</span>
+                <select value={st.font ?? ''} onChange={(e) => setStyle(field, { font: e.target.value })}>
+                  <option value="">{t9.fontDefault}</option>
+                  <optgroup label={t9.fontsAr}>{fontOpts('ar')}</optgroup>
+                  <optgroup label={t9.fontsLat}>{fontOpts('lat')}</optgroup>
+                </select>
+              </label>
+              <div className="f">
+                <span>
+                  {t9.size} ({Math.round((st.scale ?? 1) * 100)}%)
+                </span>
+                <div className="sizerow">
+                  <button onClick={() => setStyle(field, { scale: Math.max(0.3, +((st.scale ?? 1) - 0.1).toFixed(2)) })} aria-label={t9.smaller}>
+                    A−
+                  </button>
+                  <input type="range" min={0.3} max={2.5} step={0.05} value={st.scale ?? 1} onChange={(e) => setStyle(field, { scale: Number(e.target.value) })} />
+                  <button onClick={() => setStyle(field, { scale: Math.min(2.5, +((st.scale ?? 1) + 0.1).toFixed(2)) })} aria-label={t9.bigger}>
+                    A+
+                  </button>
+                </div>
+              </div>
+              <div className="row2">
+                <label className="f">
+                  <span>{t9.color}</span>
+                  <input type="color" value={st.color || '#ffffff'} onChange={(e) => setStyle(field, { color: e.target.value })} />
+                </label>
+                <label className="chk">
+                  <input type="checkbox" checked={!!st.bold} onChange={(e) => setStyle(field, { bold: e.target.checked })} />
+                  {t9.bold}
+                </label>
+              </div>
+              <label className="f">
+                <span>{t9.offX}</span>
+                <input type="range" min={-1000} max={1000} step={5} value={st.dx ?? 0} onChange={(e) => setStyle(field, { dx: Number(e.target.value) })} />
+              </label>
+              <label className="f">
+                <span>{t9.offY}</span>
+                <input type="range" min={-600} max={600} step={5} value={st.dy ?? 0} onChange={(e) => setStyle(field, { dy: Number(e.target.value) })} />
+              </label>
+              <small className="hint">{t9.textHint}</small>
+              <div className="row2">
+                <button className="ghost" onClick={() => setStyle(field, { dx: 0, dy: 0 })}>
+                  {t9.resetPos}
+                </button>
+                <button className="ghost" onClick={() => setStyles((s) => ({ ...s, [field]: {} }))}>
+                  {t9.reset}
+                </button>
+              </div>
+            </>
+          )}
 
-        <details className="sect" open>
-          <summary>{t9.textStyle}</summary>
-          <label className="f">
-            <span>{t9.field}</span>
-            <select value={field} onChange={(e) => setField(e.target.value as FieldKey)}>
-              {FIELDS.map((k) => (
-                <option key={k} value={k}>
-                  {t9[k]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="f">
-            <span>{t9.font}</span>
-            <select value={st.font ?? ''} onChange={(e) => setStyle(field, { font: e.target.value })}>
-              <option value="">{t9.fontDefault}</option>
-              <optgroup label={t9.fontsAr}>{fontOpts('ar')}</optgroup>
-              <optgroup label={t9.fontsLat}>{fontOpts('lat')}</optgroup>
-            </select>
-          </label>
-          <label className="f">
-            <span>
-              {t9.size} ({Math.round((st.scale ?? 1) * 100)}%)
-            </span>
-            <input type="range" min={0.4} max={1.8} step={0.05} value={st.scale ?? 1} onChange={(e) => setStyle(field, { scale: Number(e.target.value) })} />
-          </label>
-          <div className="row2">
-            <label className="f">
-              <span>{t9.color}</span>
-              <input type="color" value={st.color || '#ffffff'} onChange={(e) => setStyle(field, { color: e.target.value })} />
-            </label>
-            <label className="chk">
-              <input type="checkbox" checked={!!st.bold} onChange={(e) => setStyle(field, { bold: e.target.checked })} />
-              {t9.bold}
-            </label>
-          </div>
-          <label className="f">
-            <span>{t9.offX}</span>
-            <input type="range" min={-700} max={700} step={5} value={st.dx ?? 0} onChange={(e) => setStyle(field, { dx: Number(e.target.value) })} />
-          </label>
-          <label className="f">
-            <span>{t9.offY}</span>
-            <input type="range" min={-400} max={400} step={5} value={st.dy ?? 0} onChange={(e) => setStyle(field, { dy: Number(e.target.value) })} />
-          </label>
-          <button className="ghost" onClick={() => setStyles((s) => ({ ...s, [field]: {} }))}>
-            {t9.reset}
-          </button>
-        </details>
+          {tab === 'photos' && (
+            <>
+              <div className="f">
+                <span>
+                  {t9.photos} ({photos.length}/{MAX_PHOTOS})
+                </span>
+                <label
+                  className={'drop' + (drag ? ' on' : '')}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    setDrag(true)
+                  }}
+                  onDragLeave={() => setDrag(false)}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setDrag(false)
+                    addFiles(e.dataTransfer.files)
+                  }}
+                >
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      if (e.target.files) addFiles(e.target.files)
+                      e.target.value = ''
+                    }}
+                  />
+                  {t9.drop}
+                </label>
+                {photos.length === 0 && <small>{t9.noPhotos}</small>}
+              </div>
+              {long && photos.length > 0 && (
+                <div className="row2">
+                  <label className="f">
+                    <span>{t9.photoSec}</span>
+                    <input type="number" min={2} max={40} step={0.5} value={allSec} onChange={(e) => setAllSec(Number(e.target.value))} />
+                  </label>
+                  <button className="ghost" onClick={() => setPhotos((l) => l.map((p) => ({ ...p, dur: Math.min(40, Math.max(2, allSec || 2)) })))}>
+                    {t9.applyAll}
+                  </button>
+                </div>
+              )}
+              <ul className="thumbs">
+                {photos.map((p, i) => (
+                  <li key={p.id}>
+                    <img src={p.thumb} alt={`${i + 1}`} />
+                    <div>
+                      <button aria-label={t9.up} onClick={() => move(i, -1)} disabled={i === 0}>
+                        ‹
+                      </button>
+                      <button aria-label={t9.down} onClick={() => move(i, 1)} disabled={i === photos.length - 1}>
+                        ›
+                      </button>
+                      <button aria-label={t9.remove} onClick={() => setPhotos((x) => x.filter((y) => y.id !== p.id))}>
+                        ✕
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
-        <details className="sect">
-          <summary>{t9.overlays}</summary>
-          <OverlayPicker t9={t9} onPick={(preset) => addOverlay({ preset })} />
-          <label className="btn wide">
-            {t9.overlayUpload}
-            <input
-              type="file"
-              accept="image/png,image/webp,image/svg+xml,image/*"
-              multiple
-              hidden
-              onChange={(e) => {
-                if (e.target.files) addCustoms(e.target.files)
-                e.target.value = ''
-              }}
-            />
-          </label>
-          {customs.length > 0 && (
-            <div className="cgrid">
-              {customs.map((c) => (
-                <button key={c.id} title={t9.overlays} onClick={() => addOverlay({ custom: c.id, motion: 'drift' })}>
-                  <img src={c.thumb} alt="" />
+          {tab === 'overlays' && (
+            <>
+              <OverlayPicker t9={t9} active={overlays[0]?.preset} onPick={(preset) => addOverlay({ preset })} />
+              <label className="btn wide">
+                {t9.overlayUpload}
+                <input
+                  type="file"
+                  accept="image/png,image/webp,image/svg+xml,image/*"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    if (e.target.files) addCustoms(e.target.files)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+              {customs.length > 0 && (
+                <div className="cgrid">
+                  {customs.map((c) => (
+                    <button key={c.id} title={t9.overlays} className={overlays[0]?.custom === c.id ? 'on' : ''} onClick={() => addOverlay({ custom: c.id, motion: 'drift' })}>
+                      <img src={c.thumb} alt="" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              <b className="sub">{t9.overlayActive}</b>
+              {overlays.length === 0 && <small>{t9.overlayNone}</small>}
+              {overlays.map((o) => {
+                const pr = PRESETS.find((x) => x.id === o.preset)
+                const label = pr ? `${t9.shapes[pr.shape]} ${t9.motions[pr.motion]}` : t9.overlays
+                return (
+                  <div className="ov" key={o.uid}>
+                    <div className="ovhead">
+                      <span>{label}</span>
+                      <button aria-label={t9.clearOverlay} title={t9.clearOverlay} onClick={() => setOverlays([])}>
+                        ✕
+                      </button>
+                    </div>
+                    {o.custom !== undefined && (
+                      <select value={o.motion ?? 'drift'} onChange={(e) => patchOverlay(o.uid, { motion: e.target.value as Motion | 'frame' })}>
+                        {(['fall', 'rise', 'twinkle', 'drift', 'burst', 'frame'] as const).map((m) => (
+                          <option key={m} value={m}>
+                            {t9.motions[m]}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <label className="f">
+                      <span>{t9.opacity}</span>
+                      <input type="range" min={0.1} max={1} step={0.05} value={o.opacity} onChange={(e) => patchOverlay(o.uid, { opacity: Number(e.target.value) })} />
+                    </label>
+                    {o.motion !== 'frame' && (
+                      <label className="f">
+                        <span>{t9.ovSize}</span>
+                        <input type="range" min={0.5} max={2.5} step={0.1} value={o.scale} onChange={(e) => patchOverlay(o.uid, { scale: Number(e.target.value) })} />
+                      </label>
+                    )}
+                  </div>
+                )
+              })}
+            </>
+          )}
+
+          {tab === 'motion' && (
+            <div className="trs" role="radiogroup" aria-label={t9.transition}>
+              {TRANSITIONS.map((k) => (
+                <button key={k} role="radio" aria-checked={transition === k} onClick={() => setTransition(k)}>
+                  {t9.transitions[k]}
                 </button>
               ))}
             </div>
           )}
-          <b className="sub">{t9.overlayActive}</b>
-          {overlays.length === 0 && <small>{t9.overlayNone}</small>}
-          {overlays.map((o) => {
-            const pr = PRESETS.find((x) => x.id === o.preset)
-            const label = pr ? `${t9.shapes[pr.shape]} ${t9.motions[pr.motion]}` : t9.overlays
-            return (
-              <div className="ov" key={o.uid}>
-                <div className="ovhead">
-                  <span>{label}</span>
-                  <button aria-label={t9.remove} onClick={() => setOverlays((l) => l.filter((x) => x.uid !== o.uid))}>
-                    ✕
-                  </button>
-                </div>
-                {o.custom !== undefined && (
-                  <select value={o.motion ?? 'drift'} onChange={(e) => patchOverlay(o.uid, { motion: e.target.value as Motion | 'frame' })}>
-                    {(['fall', 'rise', 'twinkle', 'drift', 'burst', 'frame'] as const).map((m) => (
-                      <option key={m} value={m}>
-                        {t9.motions[m]}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <label className="f">
-                  <span>{t9.opacity}</span>
-                  <input type="range" min={0.1} max={1} step={0.05} value={o.opacity} onChange={(e) => patchOverlay(o.uid, { opacity: Number(e.target.value) })} />
-                </label>
-                {o.motion !== 'frame' && (
-                  <label className="f">
-                    <span>{t9.ovSize}</span>
-                    <input type="range" min={0.5} max={2.5} step={0.1} value={o.scale} onChange={(e) => patchOverlay(o.uid, { scale: Number(e.target.value) })} />
-                  </label>
-                )}
-              </div>
-            )
-          })}
-        </details>
-
-        <label className="f">
-          <span>{t9.transition}</span>
-          <select value={transition} onChange={(e) => setTransition(e.target.value as Transition)}>
-            {TRANSITIONS.map((k) => (
-              <option key={k} value={k}>
-                {t9.transitions[k]}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="f">
-          <span>
-            {t9.photos} ({photos.length}/8)
-          </span>
-          <label
-            className={'drop' + (drag ? ' on' : '')}
-            onDragOver={(e) => {
-              e.preventDefault()
-              setDrag(true)
-            }}
-            onDragLeave={() => setDrag(false)}
-            onDrop={(e) => {
-              e.preventDefault()
-              setDrag(false)
-              addFiles(e.dataTransfer.files)
-            }}
-          >
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => {
-                if (e.target.files) addFiles(e.target.files)
-                e.target.value = ''
-              }}
-            />
-            {t9.drop}
-          </label>
-          {photos.length === 0 && <small>{t9.noPhotos}</small>}
-          <ul className="thumbs">
-            {photos.map((p, i) => (
-              <li key={p.id}>
-                <img src={p.thumb} alt={`${i + 1}`} />
-                <div>
-                  <button aria-label={t9.up} onClick={() => move(i, -1)} disabled={i === 0}>
-                    ‹
-                  </button>
-                  <button aria-label={t9.down} onClick={() => move(i, 1)} disabled={i === photos.length - 1}>
-                    ›
-                  </button>
-                  <button aria-label={t9.remove} onClick={() => setPhotos((x) => x.filter((y) => y.id !== p.id))}>
-                    ✕
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
         </div>
       </aside>
 
       <main className="main">
         <div className="stage">
-          <canvas ref={stage} width={960} height={540} />
+          <canvas
+            ref={stage}
+            width={960}
+            height={540}
+            onPointerDown={(e) => {
+              const h = hitAt(e)
+              if (!h) return
+              setField(h.f)
+              const s0 = styles[h.f]
+              dragText.current = { f: h.f, x: e.clientX, y: e.clientY, dx: s0?.dx ?? 0, dy: s0?.dy ?? 0 }
+              e.currentTarget.setPointerCapture(e.pointerId)
+            }}
+            onPointerMove={(e) => {
+              const d = dragText.current
+              const cv = e.currentTarget
+              if (d) {
+                const k = 1920 / cv.getBoundingClientRect().width
+                setStyle(d.f, { dx: Math.round(d.dx + (e.clientX - d.x) * k), dy: Math.round(d.dy + (e.clientY - d.y) * k) })
+              } else cv.style.cursor = hitAt(e) ? 'move' : 'default'
+            }}
+            onPointerUp={() => {
+              dragText.current = null
+            }}
+          />
           {!ready && <div className="loading">{t9.loadingFonts}</div>}
         </div>
         <div className="bar">
           <button className="play" onClick={() => setPlaying((p) => !p)}>
             {playing ? t9.pause : t9.play}
           </button>
-          <input
-            type="range"
-            min={0}
-            max={dur}
-            step={0.01}
-            value={t}
-            aria-label={t9.position}
-            onChange={(e) => {
-              setPlaying(false)
-              tRef.current = Number(e.target.value)
-              setT(tRef.current)
-            }}
-          />
+          <input type="range" min={0} max={dur} step={0.01} value={t} aria-label={t9.position} onChange={(e) => seek(Number(e.target.value))} />
           <span className="time">
             {fmt(t)} / {fmt(dur)}
           </span>
-        </div>
-
-        <TemplateStrip rc={rc} active={tplId} occ={occTab} onOcc={setOccTab} onPick={pickTemplate} ready={ready} t9={t9} />
-
-        <div className="export">
-          <label>
-            <span>{t9.quality}</span>
-            <select value={quality} onChange={(e) => setQuality(e.target.value as '1080' | '720')} disabled={busy}>
-              <option value="1080">{t9.q1080}</option>
-              <option value="720">{t9.q720}</option>
-            </select>
-          </label>
           {busy ? (
             <>
               <div className="prog" role="progressbar" aria-valuenow={Math.round(progress * 100)}>
@@ -608,11 +678,34 @@ export default function App() {
               </button>
             </>
           ) : (
-            <button className="go" onClick={doExport} disabled={!ready}>
-              {t9.export}
-            </button>
+            <>
+              <select value={quality} onChange={(e) => setQuality(e.target.value as '1080' | '720')} aria-label={t9.quality} title={t9.quality}>
+                <option value="1080">{t9.q1080}</option>
+                <option value="720">{t9.q720}</option>
+              </select>
+              <button className="go" onClick={doExport} disabled={!ready}>
+                {t9.export}
+              </button>
+            </>
           )}
         </div>
+
+        <Timeline
+          t9={t9}
+          total={dur}
+          t={t}
+          playing={playing}
+          photos={photos.map((p) => ({ id: p.id, thumb: p.thumb, dur: p.dur }))}
+          editable={long}
+          wins={rc.win}
+          texts={data}
+          field={field}
+          onField={setField}
+          onSeek={seek}
+          onDur={setDur}
+          onWin={(f, w) => setWins((x) => ({ ...x, [f]: w }))}
+        />
+
         {msg && <p className={'msg ' + msg.type}>{msg.text}</p>}
       </main>
     </div>
@@ -620,7 +713,7 @@ export default function App() {
 }
 
 function TemplateStrip(props: {
-  rc: ReturnType<typeof makeRenderCtx>
+  build: (tp: (typeof TEMPLATES)[number]) => ReturnType<typeof makeRenderCtx>
   active: string
   occ: string
   onOcc: (o: string) => void
@@ -628,7 +721,7 @@ function TemplateStrip(props: {
   ready: boolean
   t9: (typeof DICT)['ar']
 }) {
-  const { rc, ready, occ, t9 } = props
+  const { build, ready, occ, t9 } = props
   const refs = useRef<Record<string, HTMLCanvasElement | null>>({})
   const list = useMemo(() => TEMPLATES.filter((x) => x.occasion === occ), [occ])
   useEffect(() => {
@@ -636,11 +729,13 @@ function TemplateStrip(props: {
     const h = setTimeout(() => {
       for (const tp of list) {
         const cv = refs.current[tp.id]
-        if (cv) renderFrame(cv, tp, rc, tp.duration(rc) * 0.7)
+        if (!cv) continue
+        const r = build(tp)
+        renderFrame(cv, tp, r, tp.kind === 'long' ? 8.5 : tp.duration(r) * 0.7)
       }
     }, 120)
     return () => clearTimeout(h)
-  }, [rc, ready, list])
+  }, [build, ready, list])
   return (
     <div className="tpls">
       <div className="occs" role="tablist" aria-label={t9.occasions}>
@@ -664,7 +759,7 @@ function TemplateStrip(props: {
               <i style={{ background: tp.swatch[0] }} />
               <i style={{ background: tp.swatch[1] }} />
               <i style={{ background: tp.swatch[2] }} />
-              {t9.layouts[tp.layout]} {tp.variant + 1}
+              {tp.kind === 'legacy' ? `${t9.occ[tp.tag ?? 'general']} · ${t9.layouts[tp.layout]}` : `${t9.occ[tp.occasion]} ${tp.num}`}
             </span>
           </button>
         ))}
@@ -673,7 +768,7 @@ function TemplateStrip(props: {
   )
 }
 
-function OverlayPicker(props: { t9: (typeof DICT)['ar']; onPick: (id: string) => void }) {
+function OverlayPicker(props: { t9: (typeof DICT)['ar']; active?: string; onPick: (id: string) => void }) {
   const refs = useRef<Record<string, HTMLCanvasElement | null>>({})
   useEffect(() => {
     for (const p of PRESETS) {
@@ -689,7 +784,7 @@ function OverlayPicker(props: { t9: (typeof DICT)['ar']; onPick: (id: string) =>
   return (
     <div className="ogrid">
       {PRESETS.map((p) => (
-        <button key={p.id} title={`${props.t9.shapes[p.shape]} ${props.t9.motions[p.motion]}`} onClick={() => props.onPick(p.id)}>
+        <button key={p.id} className={props.active === p.id ? 'on' : ''} title={`${props.t9.shapes[p.shape]} ${props.t9.motions[p.motion]}`} onClick={() => props.onPick(p.id)}>
           <canvas
             ref={(el) => {
               refs.current[p.id] = el
