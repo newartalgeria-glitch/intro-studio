@@ -26,12 +26,22 @@ interface Props {
   onField: (f: FieldKey) => void
   onSeek: (t: number) => void
   onDur: (id: number, d: number) => void
+  onDurAll: (d: number) => void
+  onRemove: (id: number) => void
   onWin: (f: FieldKey, w: [number, number]) => void
 }
 
 export function Timeline(p: Props) {
   const { t9, total, t } = p
   const [zoom, setZoom] = useState(1)
+  const [menu, setMenu] = useState<{ id: number; x: number; y: number } | null>(null)
+  useEffect(() => {
+    if (!menu) return
+    const close = () => setMenu(null)
+    window.addEventListener('pointerdown', close)
+    return () => window.removeEventListener('pointerdown', close)
+  }, [menu])
+  const menuPhoto = menu ? p.photos.find((x) => x.id === menu.id) : undefined
   const box = useRef<HTMLDivElement>(null)
   const [vw, setVw] = useState(520)
 
@@ -127,6 +137,11 @@ export function Timeline(p: Props) {
                     className="clip pic"
                     style={{ left: c.start * px, width: Math.max(4, c.dur * px - 1), backgroundImage: `url(${c.thumb})` }}
                     title={`${c.dur.toFixed(1)} ${t9.tlSeconds}`}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setMenu({ id: c.id, x: e.clientX, y: e.clientY })
+                    }}
                     onPointerDown={(e) => {
                       e.stopPropagation()
                       p.onSeek(c.start)
@@ -180,6 +195,23 @@ export function Timeline(p: Props) {
           <div className="playhead" style={{ left: LAB + t * px }} />
         </div>
       </div>
+      {menu && menuPhoto && (
+        <div className="ctx" style={{ left: Math.min(menu.x, window.innerWidth - 230), top: Math.min(menu.y, window.innerHeight - 320) }} onPointerDown={(e) => e.stopPropagation()}>
+          <b>
+            {t9.photoSec}: {menuPhoto.dur}
+          </b>
+          <div className="presets">
+            {[2, 3, 4, 5, 6, 8, 10, 15].map((d) => (
+              <button key={d} onClick={() => { p.onDur(menu.id, d); setMenu(null) }}>
+                {d}
+              </button>
+            ))}
+          </div>
+          <input type="number" min={2} max={40} step={0.5} defaultValue={menuPhoto.dur} onChange={(e) => { const v = Number(e.target.value); if (v >= 2 && v <= 40) p.onDur(menu.id, v) }} />
+          <button onClick={() => { p.onDurAll(menuPhoto.dur); setMenu(null) }}>{t9.applyAll}</button>
+          <button className="danger" onClick={() => { p.onRemove(menu.id); setMenu(null) }}>✕</button>
+        </div>
+      )}
     </div>
   )
 }

@@ -151,8 +151,8 @@ function place(p: Pattern, i: number, n: number, rand: () => number, t: number):
 
 const COUNT: Record<Pattern, number> = { rain: 26, rise: 26, corners: 36, border: 38, scatter: 54, orbit: 18, sides: 16, wave: 21 }
 
-export function drawScene(c: CanvasRenderingContext2D, t: number, _r: RenderCtx, sc: Scene, pal: Palette) {
-  drawBase(c, t, sc.base, pal)
+export function drawScene(c: CanvasRenderingContext2D, t: number, _r: RenderCtx, sc: Scene, pal: Palette, skipBase = false) {
+  if (!skipBase) drawBase(c, t, sc.base, pal)
   const light = isLight(pal.bg0)
   const cols = light ? [pal.frame, pal.name, pal.soft] : [pal.frame, pal.hi, pal.soft]
   const rand = rng(sc.seed * 977 + 13)

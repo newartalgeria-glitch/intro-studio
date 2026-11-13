@@ -187,6 +187,10 @@ export default function App() {
         return out
       })
     }
+    if (next.sec) {
+      setPhotos((l) => l.map((p) => ({ ...p, dur: next.sec! })))
+      setAllSec(next.sec)
+    }
     setTplId(id)
     setOccTab(next.occasion)
   }
@@ -201,7 +205,7 @@ export default function App() {
     for (const f of list.slice(0, Math.max(0, room))) {
       try {
         const r = await loadPhoto(f)
-        out.push({ id: idRef.current++, ...r, dur: DEFAULT_PHOTO_SEC })
+        out.push({ id: idRef.current++, ...r, dur: tpl.sec ?? DEFAULT_PHOTO_SEC })
       } catch {
         /* skip unreadable file */
       }
@@ -703,6 +707,8 @@ export default function App() {
           onField={setField}
           onSeek={seek}
           onDur={setDur}
+          onDurAll={(d) => setPhotos((l) => l.map((p) => ({ ...p, dur: d })))}
+          onRemove={(id) => setPhotos((l) => l.filter((p) => p.id !== id))}
           onWin={(f, w) => setWins((x) => ({ ...x, [f]: w }))}
         />
 
@@ -747,7 +753,7 @@ function TemplateStrip(props: {
       </div>
       <div className="strip" role="radiogroup">
         {list.map((tp) => (
-          <button key={tp.id} role="radio" aria-checked={props.active === tp.id} onClick={() => props.onPick(tp.id)}>
+          <button key={tp.id} title={tp.kind === 'long' ? tp.tag : undefined} role="radio" aria-checked={props.active === tp.id} onClick={() => props.onPick(tp.id)}>
             <canvas
               ref={(el) => {
                 refs.current[tp.id] = el
@@ -759,7 +765,7 @@ function TemplateStrip(props: {
               <i style={{ background: tp.swatch[0] }} />
               <i style={{ background: tp.swatch[1] }} />
               <i style={{ background: tp.swatch[2] }} />
-              {tp.kind === 'legacy' ? `${t9.occ[tp.tag ?? 'general']} · ${t9.layouts[tp.layout]}` : `${t9.occ[tp.occasion]} ${tp.num}`}
+              {tp.kind === 'legacy' ? `${t9.occ[tp.tag ?? 'general']} · ${t9.layouts[tp.layout]}` : `${t9.occ[tp.occasion]} ${tp.num} · ${tp.sec}${t9.tlSeconds}`}
             </span>
           </button>
         ))}

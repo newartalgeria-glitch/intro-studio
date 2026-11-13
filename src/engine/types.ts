@@ -81,6 +81,8 @@ export interface Template {
   kind: 'long' | 'legacy'
   /** number inside its category, 1-based */
   num: number
+  /** default seconds per photo (long templates) */
+  sec?: number
   /** general only: the occasion this design was made for */
   tag?: string
   defaultWin(r: RenderCtx): Wins

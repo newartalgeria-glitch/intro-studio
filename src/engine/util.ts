@@ -149,7 +149,7 @@ export function slideshow(
   y: number,
   w: number,
   h: number,
-  opts: { each?: number; fade?: number; first?: number; start?: number; alpha?: number; durs?: number[] } = {},
+  opts: { each?: number; fade?: number; first?: number; start?: number; alpha?: number; durs?: number[]; paint?: (idx: number, local: number, dur: number) => void } = {},
 ) {
   const each = opts.each ?? 3
   const fade = opts.fade ?? 0.9
@@ -172,6 +172,7 @@ export function slideshow(
   }
   const photo = (idx: number, l: number, a = 1) => {
     c.globalAlpha = A * a
+    if (opts.paint) return opts.paint(idx + first, l, eachOf(idx))
     const p = clamp(l / (eachOf(idx) + fade))
     const dir = idx % 2 === 0 ? 1 : -1
     cover(c, pic(r, idx + first), x, y, w, h, 1.04 + 0.08 * p, dir * (p - 0.5) * 0.6, -0.3)

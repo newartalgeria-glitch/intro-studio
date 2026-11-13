@@ -1,20 +1,30 @@
 import type { FieldKey, RenderCtx, Template, Wins } from './types'
 import type { Palette } from './palettes'
-import { fontOf } from './palettes'
+import { fontOf, rgba } from './palettes'
 import type { Scene } from './scenes'
 import { drawScene } from './scenes'
-import type { FrameId } from './frames'
-import { drawFramed } from './frames'
-import { easeInOut, gate, hasTwo, lerp, slideshow, text } from './util'
+import { drawFx, pose } from './motion'
+import type { Recipe } from './motion'
+import { cached, clamp, easeInOut, gate, hasTwo, lerp, pic, seg, slideshow, text } from './util'
 
-export type Side = 'L' | 'R' | 'T' | 'C'
+const W = 1920
+const H = 1080
+
+export type Side = 'L' | 'R' | 'T'
+export type Layout = 'card' | 'collage' | 'studio'
+export type CardStyle = 'plain' | 'polaroid' | 'gold' | 'round'
 
 export interface Design {
   occ: string
   num: number
   scene: Scene
-  frame: FrameId
+  layout: Layout
+  /** 'blur' = the photo itself, enlarged and blurred, as background; 'palette' = occasion background */
+  bg: 'blur' | 'palette'
+  card: CardStyle
   side: Side
+  recipe: Recipe
+  sec: number
   pal: Palette
 }
 
@@ -24,17 +34,15 @@ interface R4 {
   w: number
   h: number
 }
-const FULL: Record<Side, R4> = {
-  R: { x: 300, y: 100, w: 1320, h: 880 },
-  L: { x: 300, y: 100, w: 1320, h: 880 },
-  T: { x: 300, y: 100, w: 1320, h: 880 },
-  C: { x: 140, y: 80, w: 1640, h: 920 },
+const FULL: Record<Layout, R4> = {
+  card: { x: 200, y: 60, w: 1520, h: 960 },
+  collage: { x: 560, y: 70, w: 800, h: 940 },
+  studio: { x: 260, y: 50, w: 1400, h: 780 },
 }
 const SIDE: Record<Side, R4> = {
   R: { x: 1010, y: 150, w: 810, h: 780 },
   L: { x: 100, y: 150, w: 810, h: 780 },
-  T: { x: 460, y: 350, w: 1000, h: 560 },
-  C: { x: 140, y: 80, w: 1640, h: 920 },
+  T: { x: 460, y: 330, w: 1000, h: 520 },
 }
 
 export const MIN_LEN = 14
@@ -55,14 +63,17 @@ const WIN: Record<FieldKey, [number, number]> = {
 export function makeLong(d: Design): Template {
   const { pal, side } = d
   const fnt = fontOf(pal)
+  const bgc = pal.bg1
   return {
     id: `${d.occ}:${d.num}`,
     occasion: d.occ,
-    layout: d.frame,
+    layout: d.layout,
     variant: d.num,
     swatch: [pal.bg0, pal.frame, pal.name],
     kind: 'long',
     num: d.num,
+    sec: d.sec,
+    tag: d.recipe.name,
     defaultWin: (r): Wins => {
       const T = total(r)
       const o = {} as Wins
@@ -72,9 +83,11 @@ export function makeLong(d: Design): Template {
     duration: total,
     render(c, t, r) {
       const dat = r.data
-      drawScene(c, t, r, d.scene, pal)
+      const T = total(r)
+      const starts: number[] = []
+      r.durs.reduce((a, b) => (starts.push(a), a + b), 0)
 
-      // how much "title" is on screen right now -> the photo frame glides between its two places
+      // how much "title" is on screen right now -> the photo card glides between its two places
       let f = 0
       for (const k of Object.keys(r.win) as FieldKey[]) {
         const [s, e] = r.win[k]
@@ -83,25 +96,144 @@ export function makeLong(d: Design): Template {
         f = Math.max(f, g)
       }
       const e = easeInOut(f)
-      const a = FULL[side]
+      const a = FULL[d.layout]
       const b = SIDE[side]
-      const rect = { x: lerp(a.x, b.x, e), y: lerp(a.y, b.y, e), w: lerp(a.w, b.w, e), h: lerp(a.h, b.h, e) }
+      const box = { x: lerp(a.x, b.x, e), y: lerp(a.y, b.y, e), w: lerp(a.w, b.w, e), h: lerp(a.h, b.h, e) }
 
-      drawFramed(c, d.frame, rect.x, rect.y, rect.w, rect.h, pal, t, (x, y, w, h) => {
-        slideshow(c, r, t, x, y, w, h, { durs: r.durs, fade: 1.1 })
-        if (side === 'C' && f > 0.01) {
-          c.fillStyle = `rgba(0,0,0,${0.55 * e})`
-          c.fillRect(x, y, w, h)
+      const blur = (idx: number) =>
+        cached(r, `bl${idx % r.pics.length}`, 48, 27, (x) => {
+          x.imageSmoothingQuality = 'high'
+          const p = pic(r, idx)
+          const s = Math.max(48 / p.w, 27 / p.h)
+          x.drawImage(p.src, (48 - p.w * s) / 2, (27 - p.h * s) / 2, p.w * s, p.h * s)
+        })
+
+      const drawCard = (idx: number, cx: number, cy: number, maxW: number, maxH: number, ps: ReturnType<typeof pose>, alpha = 1, rot = 0) => {
+        const p = pic(r, idx)
+        const k = Math.min(maxW / p.w, maxH / p.h)
+        const cw = p.w * k
+        const ch = p.h * k
+        c.save()
+        c.globalAlpha *= alpha
+        c.translate(cx + ps.x * cw, cy + ps.y * ch)
+        c.rotate(ps.r + rot)
+        c.scale(ps.s, ps.s)
+        const x = -cw / 2
+        const y = -ch / 2
+        c.shadowColor = 'rgba(0,0,0,0.55)'
+        c.shadowBlur = 44
+        c.shadowOffsetY = 16
+        if (d.card === 'polaroid') {
+          c.fillStyle = pal.paper
+          c.fillRect(x - 24, y - 24, cw + 48, ch + 78)
+        } else if (d.card === 'round') {
+          c.fillStyle = '#000'
+          c.beginPath()
+          c.roundRect(x, y, cw, ch, 30)
+          c.fill()
+        } else {
+          c.fillStyle = '#000'
+          c.fillRect(x, y, cw, ch)
         }
-      })
+        c.shadowColor = 'transparent'
+        c.save()
+        if (d.card === 'round') {
+          c.beginPath()
+          c.roundRect(x, y, cw, ch, 30)
+          c.clip()
+        }
+        c.drawImage(p.src, x, y, cw, ch)
+        if (ps.soft > 0.02) {
+          c.globalAlpha *= ps.soft
+          c.drawImage(blur(idx), x, y, cw, ch)
+        }
+        c.restore()
+        if (d.card === 'gold') {
+          c.strokeStyle = pal.frame
+          c.lineWidth = 7
+          c.strokeRect(x, y, cw, ch)
+          c.strokeStyle = rgba(pal.frame, 0.55)
+          c.lineWidth = 2
+          c.strokeRect(x - 20, y - 20, cw + 40, ch + 40)
+        } else if (d.card === 'plain') {
+          c.strokeStyle = 'rgba(255,255,255,0.85)'
+          c.lineWidth = 5
+          c.strokeRect(x, y, cw, ch)
+        }
+        c.restore()
+        return { cw, ch }
+      }
+
+      const paint = (idx: number, l: number, dur: number) => {
+        const p = pic(r, idx)
+        const start = starts[idx] ?? 0
+        const phase = Math.min(2, Math.floor((3 * start) / T))
+        const u = clamp(l / (dur + 1.2))
+        const ps = pose(d.recipe.phases[phase][0], u)
+        // ---- background ----
+        if (d.bg === 'blur') {
+          c.save()
+          c.translate(W / 2 - ps.x * 900, H / 2 - ps.y * 500)
+          c.scale(1.3 + 0.08 * u, 1.3 + 0.08 * u)
+          c.imageSmoothingQuality = 'high'
+          c.drawImage(blur(idx), -W / 2, -H / 2, W, H)
+          c.restore()
+          c.fillStyle = rgba(bgc, 0.5)
+          c.fillRect(0, 0, W, H)
+          drawScene(c, t, r, d.scene, pal, true)
+        } else drawScene(c, t, r, d.scene, pal)
+        // ---- card(s) ----
+        const cx = box.x + box.w / 2
+        const cy = box.y + box.h / 2
+        if (d.layout === 'collage' && e < 0.95) {
+          const side2 = (dir: number, k: number) => {
+            const q = pic(r, idx + dir)
+            const kk = Math.min(420 / q.w, 560 / q.h)
+            const nw = q.w * kk
+            const bob = Math.sin(t * 0.6 + dir) * 14
+            drawCard(idx + dir, cx + dir * (box.w * 0.5 + nw * 0.5 + 40 + k), cy + 40 + bob + dir * 20, 420, 560, pose('weave', u), 0.92 * (1 - e), dir * 0.13)
+          }
+          if (r.pics.length > 1) {
+            side2(-1, 0)
+            side2(1, 0)
+          }
+        }
+        const { cw, ch } = drawCard(idx, cx, cy, box.w, box.h, ps)
+        if (d.layout === 'studio') {
+          const bottom = cy + (ch * ps.s) / 2 + 10
+          c.save()
+          c.beginPath()
+          c.rect(cx - (cw * ps.s) / 2, bottom, cw * ps.s, ch * 0.34)
+          c.clip()
+          c.translate(cx, bottom)
+          c.scale(1, -1)
+          c.globalAlpha *= 0.4
+          c.drawImage(p.src, (-cw * ps.s) / 2, -ch * ps.s, cw * ps.s, ch * ps.s)
+          c.restore()
+          const g = c.createLinearGradient(0, bottom, 0, bottom + ch * 0.34)
+          g.addColorStop(0, rgba(bgc, 0.35))
+          g.addColorStop(1, rgba(bgc, 1))
+          c.fillStyle = g
+          c.fillRect(cx - cw, bottom, cw * 2, ch * 0.36)
+        }
+      }
+      slideshow(c, r, t, 0, 0, W, H, { durs: r.durs, fade: 1.2, paint })
+
+      // ---- light & mood of the current phase (cross-faded) ----
+      for (let q = 0; q < 3; q++) {
+        const lo = (q * T) / 3
+        const hi = ((q + 1) * T) / 3
+        const w = (q === 0 ? 1 : seg(t, lo - 2, lo + 2)) * (q === 2 ? 1 : 1 - seg(t, hi - 2, hi + 2))
+        for (const fx of d.recipe.phases[q][1]) drawFx(c, fx, t, w * 0.9, pal)
+      }
 
       // ---- text ----
       c.save()
-      c.shadowColor = side === 'C' ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.25)'
-      c.shadowBlur = side === 'C' ? 20 : 8
+      c.shadowColor = 'rgba(0,0,0,0.45)'
+      c.shadowBlur = 12
       const two = hasTwo(dat)
       const col = side === 'L' ? 1420 : side === 'R' ? 500 : 960
-      const mw = side === 'T' || side === 'C' ? 1300 : 780
+      const mw = side === 'T' ? 1300 : 780
       const head = { font: (s: number) => fnt(s, 500), fill: pal.soft, maxW: mw }
       const nm = (s: number) => ({ font: (z: number) => fnt(z, 700), size: s, fill: pal.name, maxW: mw })
       const body = { font: (z: number) => fnt(z, 500), fill: pal.ink, maxW: mw }
@@ -116,7 +248,7 @@ export function makeLong(d: Design): Template {
         text(c, dat.place, col, 1012, { f: 'place', ...head, size: 38 })
         text(c, dat.footer, col, 1055, { f: 'footer', ...body, size: 30 })
       } else {
-        const o = side === 'C' ? 0 : 0
+        const o = 0
         text(c, dat.headline, col, 270 + o, { f: 'headline', ...head, size: 54 })
         if (two) {
           text(c, dat.name1, col, 470, { f: 'name1', ...nm(118) })

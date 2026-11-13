@@ -8,9 +8,9 @@ import { cinema } from './layouts/cinema'
 import { polaroid } from './layouts/polaroid'
 import type { Base, Pattern } from './scenes'
 import type { SpriteId } from './sprites'
-import { FRAMES } from './frames'
+import { RECIPES } from './motion'
 import { makeLong } from './long'
-import type { Side } from './long'
+import type { CardStyle, Layout, Side } from './long'
 
 export const LAYOUTS = [arch, album, panels, cinema, polaroid]
 export const LAYOUT_IDS = LAYOUTS.map((l) => l.id)
@@ -29,7 +29,10 @@ const THEME: Record<string, { sprites: SpriteId[]; bases: Base[] }> = {
   love: { sprites: ['heart', 'rose', 'butterfly', 'sparkle', 'petal', 'ring', 'flower'], bases: ['radial', 'grad', 'rays', 'diamonds', 'bands'] },
 }
 const PATTERNS: Pattern[] = ['rain', 'rise', 'corners', 'border', 'scatter', 'orbit', 'sides', 'wave']
-const SIDES: Side[] = ['R', 'L', 'T', 'C']
+const SIDES: Side[] = ['R', 'L', 'T']
+const LAYOUT3: Layout[] = ['card', 'collage', 'studio']
+const CARDS: CardStyle[] = ['plain', 'polaroid', 'gold', 'round']
+const SECS = [6, 4, 6, 5]
 
 /** 10 occasions x 15 designs. Each differs in background, motif, motion, frame shape and text position, not only colour. */
 const LONG: Template[] = Object.keys(THEME).flatMap((occ, oi) => {
@@ -38,12 +41,17 @@ const LONG: Template[] = Object.keys(THEME).flatMap((occ, oi) => {
   return Array.from({ length: 15 }, (_, i) => {
     const s0 = (i * 2 + oi) % th.sprites.length
     const sprites = [0, 1, 2, 3].map((k) => th.sprites[(s0 + k) % th.sprites.length])
+    const layout = LAYOUT3[(i + oi) % 3]
     return makeLong({
       occ,
       num: i + 1,
       pal: pals[(i * 2 + oi) % pals.length],
-      frame: FRAMES[(i * 4 + oi * 3) % FRAMES.length],
-      side: SIDES[(i * 3 + oi) % 4],
+      layout,
+      bg: layout === 'studio' || i % 4 === 1 ? 'palette' : 'blur',
+      card: CARDS[(i * 3 + oi) % 4],
+      side: SIDES[(i + oi * 2) % 3],
+      recipe: RECIPES[(i + oi * 3) % RECIPES.length],
+      sec: SECS[(i * 2 + oi) % 4],
       scene: { base: th.bases[(i * 2 + oi) % th.bases.length], pattern: PATTERNS[(i * 3 + oi * 2) % PATTERNS.length], sprites, seed: oi * 40 + i + 1 },
     })
   })

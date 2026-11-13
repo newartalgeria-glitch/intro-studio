@@ -38,7 +38,7 @@ export const SPRITES = {
     starPath(c, 5, 1, 0.42)
     c.fill()
   },
-  sparkle: (c, a) => {
+  sparkle: (c, a, _b?: string) => {
     c.fillStyle = a
     starPath(c, 4, 1, 0.14)
     c.fill()
