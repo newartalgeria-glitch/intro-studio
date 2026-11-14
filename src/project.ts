@@ -23,10 +23,29 @@ export function photoToDataUrl(p: Pic) {
 }
 
 type Writable = { write: (b: Blob) => Promise<void>; close: () => Promise<void> }
-/** The in-page "save as" dialog proved unreliable, so files go through the normal download
- *  (Chrome's own "ask where to save each file" setting then decides the folder). */
-export async function askSaveLocation(_name: string, _ext: '.mp4' | '.nadiralbum'): Promise<{ createWritable: () => Promise<Writable> } | null> {
-  return null
+type Handle = { createWritable: () => Promise<Writable> }
+let lastPickerError = ''
+export const pickerError = () => lastPickerError
+
+/** "Where to save?" dialog (Chrome / Edge). Call it straight from a click.
+ *  null  -> not available or refused (caller uses the normal download; pickerError() says why)
+ *  throws 'CANCEL' -> the user really closed the dialog. */
+export async function askSaveLocation(name: string, ext: '.mp4' | '.nadiralbum'): Promise<Handle | null> {
+  lastPickerError = ''
+  const fn = (window as unknown as { showSaveFilePicker?: (o: unknown) => Promise<Handle> }).showSaveFilePicker
+  if (!fn) {
+    lastPickerError = 'showSaveFilePicker unavailable'
+    return null
+  }
+  const types = ext === '.mp4' ? [{ description: 'MP4 video', accept: { 'video/mp4': ['.mp4'] } }] : [{ description: 'Nadir Photo Album', accept: { 'application/json': ['.nadiralbum'] } }]
+  try {
+    return await fn.call(window, { suggestedName: plainName(name), types })
+  } catch (e) {
+    const err = e as Error
+    if (err?.name === 'AbortError' && /user aborted|cancel/i.test(err.message || '')) throw new Error('CANCEL')
+    lastPickerError = `${err?.name}: ${err?.message}`
+    return null
+  }
 }
 export type SaveHandle = Awaited<ReturnType<typeof askSaveLocation>>
 
@@ -42,7 +61,7 @@ export async function writeTo(h: SaveHandle, blob: Blob, name: string) {
 }
 
 /** Arabic/bidi characters in a file name make some browsers drop the name entirely, so keep it plain ASCII. */
-const plainName = (name: string) => {
+function plainName(name: string) {
   const ext = name.slice(name.lastIndexOf('.'))
   const stem = name.slice(0, name.lastIndexOf('.')).replace(/[^\x20-\x7e]/g, '').replace(/[\\/:*?"<>|]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '').trim()
   const d = new Date()

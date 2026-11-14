@@ -6,7 +6,7 @@ import { loadOverlayImage, loadPhoto } from './engine/pics'
 import { exportMp4, webCodecsAvailable } from './export/encode'
 import { DICT, LANGS, sample } from './i18n'
 import type { Lang } from './i18n'
-import { askSaveLocation, overlayToDataUrl, parseProject, photoToDataUrl, writeTo } from './project'
+import { askSaveLocation, overlayToDataUrl, parseProject, photoToDataUrl, pickerError, writeTo } from './project'
 import type { SaveHandle } from './project'
 import type { ProjectFile } from './project'
 
@@ -238,6 +238,7 @@ export default function App() {
     try {
       handle = await askSaveLocation(fname, '.nadiralbum')
     } catch {
+      setMsg({ type: 'err', text: t9.saveCancelled })
       return
     }
     const file: ProjectFile = {
@@ -255,7 +256,7 @@ export default function App() {
       transition,
     }
     await writeTo(handle, new Blob([JSON.stringify(file)], { type: 'application/json' }), fname)
-    setMsg({ type: 'ok', text: t9.saved })
+    setMsg(handle ? { type: 'ok', text: t9.savedChosen } : pickerError() ? { type: 'err', text: `${t9.saved} (${pickerError()})` } : { type: 'ok', text: t9.saved })
   }
 
   const openProject = async (f: File) => {
@@ -315,6 +316,7 @@ export default function App() {
     try {
       handle = await askSaveLocation(fname, '.mp4')
     } catch {
+      setMsg({ type: 'err', text: t9.saveCancelled })
       return
     }
     setPlaying(false)
@@ -333,7 +335,8 @@ export default function App() {
         signal: abort.current.signal,
       })
       await writeTo(handle, blob, fname)
-      setMsg({ type: 'ok', text: t9.exportDone((blob.size / 1e6).toFixed(1), codec) })
+      const done = t9.exportDone((blob.size / 1e6).toFixed(1), codec)
+      setMsg(handle ? { type: 'ok', text: `${t9.exportChosen} (${(blob.size / 1e6).toFixed(1)} MB, ${codec})` } : { type: pickerError() ? 'err' : 'ok', text: pickerError() ? `${done} [${pickerError()}]` : done })
     } catch (e) {
       const m = String((e as Error)?.message ?? e)
       if (m === 'ABORTED') setMsg({ type: 'err', text: t9.aborted })
