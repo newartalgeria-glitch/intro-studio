@@ -222,33 +222,34 @@ export function makeLong(d: Design): Template {
         }
       }
       if (isKind(d.layout)) {
-        // background follows the photo in the spotlight
+        // background follows the photo in the spotlight, melting from one photo's colours into the next
         let j = r.durs.length - 1
         for (let i = 0; i < starts.length; i++) if (t < starts[i] + r.durs[i]) { j = i; break }
-        const lt = t - (starts[j] ?? 0)
+        const mix = (i: number) => {
+          const u = ei2((t - (starts[i] - 0.5)) / 3)
+          return u * u * (3 - 2 * u)
+        }
         const bgOf = (i: number, al: number) => {
+          const z = 1.3 + 0.006 * Math.min(40, Math.max(0, t - starts[i]))
           c.save()
           c.globalAlpha *= al
-          if (d.bg === 'blur') {
-            c.translate(W / 2, H / 2)
-            c.scale(1.3 + 0.01 * lt, 1.3 + 0.01 * lt)
-            c.imageSmoothingQuality = 'high'
-            c.drawImage(blur(i), -W / 2, -H / 2, W, H)
-            c.restore()
-            c.save()
-            c.globalAlpha *= al
-            c.fillStyle = rgba(bgc, 0.5)
-            c.fillRect(0, 0, W, H)
-          }
+          c.translate(W / 2, H / 2)
+          c.scale(z, z)
+          c.imageSmoothingQuality = 'high'
+          c.drawImage(blur(i), -W / 2, -H / 2, W, H)
+          c.restore()
+          c.save()
+          c.globalAlpha *= al
+          c.fillStyle = rgba(bgc, 0.5)
+          c.fillRect(0, 0, W, H)
           c.restore()
         }
         drawScene(c, t, r, d.scene, pal, d.bg === 'blur')
         if (d.bg === 'blur') {
-          // (blur layers go under the motifs: redraw order = blur, tint, motifs)
+          // behind the motifs, newest layer first (destination-over stacks each new draw underneath)
           c.save()
           c.globalCompositeOperation = 'destination-over'
-          if (j > 0 && lt < 1) bgOf(j - 1, 1)
-          bgOf(j, ei2(lt))
+          for (let i = j; i >= Math.max(0, j - 2); i--) bgOf(i, i === Math.max(0, j - 2) ? 1 : mix(i))
           c.restore()
         }
         const k = KIND_K[d.layout]

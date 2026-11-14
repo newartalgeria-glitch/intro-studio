@@ -168,15 +168,6 @@ export default function App() {
     setLang(next)
   }
 
-  const setKind = (kind: Kind) =>
-    setData((d) => {
-      const from = sample(lang, d.kind, occ)
-      const to = sample(lang, kind, occ)
-      const out = { ...d, kind }
-      for (const k of ['headline', 'footer'] as const) if (d[k] === from[k]) out[k] = to[k]
-      return out
-    })
-
   /** Choosing a template from another occasion also swaps the sample text the user has not edited. */
   const pickTemplate = (id: string) => {
     const next = TEMPLATES.find((x) => x.id === id)
@@ -270,7 +261,7 @@ export default function App() {
   const openProject = async (f: File) => {
     try {
       const p = await parseProject(f)
-      setData(p.data)
+      setData({ ...p.data, kind: 'intro' })
       setStyles(p.styles)
       const id = resolveId(p.tplId)
       const known = TEMPLATES.find((x) => x.id === id)
@@ -441,13 +432,6 @@ export default function App() {
         <div className="pane">
           {tab === 'templates' && (
             <>
-              <div className="seg" role="tablist">
-                {(['intro', 'outro'] as Kind[]).map((k) => (
-                  <button key={k} role="tab" aria-selected={data.kind === k} onClick={() => setKind(k)}>
-                    {t9[k]}
-                  </button>
-                ))}
-              </div>
               <TemplateStrip build={buildRc} active={tplId} occ={occTab} onOcc={setOccTab} onPick={pickTemplate} ready={ready} t9={t9} />
             </>
           )}
