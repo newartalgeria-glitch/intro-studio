@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_PHOTO_SEC, FONTS, OCCASIONS, PRESETS, TEMPLATES, TRANSITIONS, drawPreset, loadFonts, makeRenderCtx, renderFrame, resolveId, setHitSink } from './engine'
-import type { FieldKey, FieldStyle, FieldStyles, Hit, IntroData, Kind, Motion, OverlayItem, Pic, Transition, Wins } from './engine'
+import { DEFAULT_PHOTO_SEC, FONTS, OCCASIONS, PRESETS, TEMPLATES, TRANSITIONS, activeAt, boxOf, defaultFont, drawPreset, loadFonts, makeRenderCtx, renderFrame, resolveId } from './engine'
+import type { FieldStyles, IntroData, Motion, OverlayItem, Pic, TextClip, Transition } from './engine'
 import { Timeline } from './Timeline'
+import type { Sel } from './Timeline'
+import { Player, clipLen, decodeDataUrl, decodeFile, mixdown, peaks } from './audio'
+import type { AudioClip, Music } from './audio'
 import { loadOverlayImage, loadPhoto } from './engine/pics'
 import { exportMp4, webCodecsAvailable } from './export/encode'
-import { DICT, LANGS, sample } from './i18n'
+import { DICT, LANGS } from './i18n'
 import type { Lang } from './i18n'
 import { askSaveLocation, overlayToDataUrl, parseProject, photoToDataUrl, pickerError, writeTo } from './project'
 import type { SaveHandle } from './project'
@@ -16,7 +19,7 @@ interface Photo {
   thumb: string
   dur: number
 }
-type Tab = 'templates' | 'text' | 'photos' | 'overlays' | 'motion'
+type Tab = 'templates' | 'text' | 'photos' | 'overlays' | 'motion' | 'music'
 const MAX_PHOTOS = 40
 interface Custom {
   id: number
@@ -25,7 +28,9 @@ interface Custom {
 }
 type Theme = 'light' | 'dark'
 
-const FIELDS: FieldKey[] = ['headline', 'name1', 'connector', 'name2', 'date', 'place', 'footer']
+/** Templates draw only their artwork; every word on screen is a user text clip. */
+const NO_DATA: IntroData = { kind: 'intro', headline: '', name1: '', connector: '', name2: '', date: '', place: '', footer: '' }
+const NO_STYLES: FieldStyles = {}
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
@@ -51,8 +56,11 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(() => stored('npa_theme', ['light', 'dark'], 'light'))
   const t9 = DICT[lang]
 
-  const [data, setData] = useState<IntroData>(() => ({ kind: 'intro', ...sample('ar', 'intro', 'wedding') }))
-  const [styles, setStyles] = useState<FieldStyles>({})
+  const [texts, setTexts] = useState<TextClip[]>([])
+  const [sel, setSel] = useState<Sel>(null)
+  const [modal, setModal] = useState<string | null>(null)
+  const [music, setMusic] = useState<Music | null>(null)
+  const [aclips, setAclips] = useState<AudioClip[]>([])
   const [photos, setPhotos] = useState<Photo[]>([])
   const [overlays, setOverlays] = useState<OverlayItem[]>([])
   const [customs, setCustoms] = useState<Custom[]>([])
@@ -60,9 +68,7 @@ export default function App() {
   const [length, setLength] = useState(180)
   const [tplId, setTplId] = useState('wedding:1')
   const [tab, setTab] = useState<Tab>('templates')
-  const [wins, setWins] = useState<Partial<Wins>>({})
   const [occTab, setOccTab] = useState('wedding')
-  const [field, setField] = useState<FieldKey>('name1')
   const [ready, setReady] = useState(false)
   const [t, setT] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -76,6 +82,7 @@ export default function App() {
   const stage = useRef<HTMLCanvasElement>(null)
   const idRef = useRef(1)
   const uidRef = useRef(1)
+  const player = useRef(new Player())
   const tRef = useRef(0)
   const abort = useRef<AbortController | null>(null)
 
@@ -96,16 +103,16 @@ export default function App() {
   const tpl = TEMPLATES.find((x) => x.id === tplId) ?? TEMPLATES[0]
   const rc = useMemo(
     () =>
-      makeRenderCtx(data, photos.map((p) => p.pic), styles, {
+      makeRenderCtx(NO_DATA, photos.map((p) => p.pic), NO_STYLES, {
         overlays,
         customs: Object.fromEntries(customs.map((c) => [c.id, c.pic])),
         transition,
         durs: photos.map((p) => p.dur),
-        wins,
         tpl,
         length,
+        texts,
       }),
-    [data, photos, styles, overlays, customs, transition, wins, tpl, length],
+    [photos, overlays, customs, transition, tpl, length, texts],
   )
   const occ = tpl.occasion
   const dur = tpl.duration(rc)
@@ -126,14 +133,9 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, tplId])
 
-  const hits = useRef<Hit[]>([])
   const draw = useCallback(() => {
     if (!ready || !stage.current) return
-    const sink: Hit[] = []
-    setHitSink(sink)
     renderFrame(stage.current, tpl, rc, tRef.current)
-    setHitSink(null)
-    hits.current = sink
   }, [ready, tpl, rc])
   useEffect(draw, [draw, t])
 
@@ -145,7 +147,10 @@ export default function App() {
       const dt = (now - last) / 1000
       last = now
       let n = tRef.current + dt
-      if (n >= dur) n = 0
+      if (n >= dur) {
+        n = 0
+        startAudio(0)
+      }
       tRef.current = n
       setT(n)
       raf = requestAnimationFrame(tick)
@@ -154,33 +159,107 @@ export default function App() {
     return () => cancelAnimationFrame(raf)
   }, [playing, dur])
 
-  const set = (k: keyof IntroData) => (e: { target: { value: string } }) => setData((d) => ({ ...d, [k]: e.target.value }))
+  const live = useRef({ music, aclips, dur })
+  live.current = { music, aclips, dur }
+  function startAudio(from: number) {
+    const l = live.current
+    player.current.play(l.music, l.aclips, from, l.dur)
+  }
+  useEffect(() => {
+    if (playing) startAudio(tRef.current)
+    else player.current.stop()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing])
+  useEffect(() => () => player.current.stop(), [])
 
-  /** Switching UI language also swaps sample text the user has not edited. */
-  const changeLang = (next: Lang) => {
-    setData((d) => {
-      const from = sample(lang, d.kind, occ)
-      const to = sample(next, d.kind, occ)
-      const out = { ...d }
-      for (const k of FIELDS) if (d[k] === from[k]) out[k] = to[k]
-      return out
+  const changeLang = (next: Lang) => setLang(next)
+
+  // ---- text clips ----
+  const selText = sel?.kind === 'text' ? texts.find((k) => k.id === sel.id) : undefined
+  const patchText = (id: number, patch: Partial<TextClip>) => setTexts((l) => l.map((k) => (k.id === id ? { ...k, ...patch } : k)))
+  const overlaps = (a: TextClip, b: TextClip) => a.id !== b.id && a.track === b.track && a.start < b.start + b.dur - 0.001 && b.start < a.start + a.dur - 0.001
+  /** After a move: if the clip now sits on top of another one on the same track, drop it on the first free track. */
+  const settle = (id: number) =>
+    setTexts((l) => {
+      const k = l.find((x) => x.id === id)
+      if (!k || !l.some((o) => overlaps(k, o))) return l
+      let tr = 0
+      while (l.some((o) => overlaps({ ...k, track: tr }, o))) tr++
+      return l.map((x) => (x.id === id ? { ...x, track: tr } : x))
     })
-    setLang(next)
+  const addText = (text: string) => {
+    const body = text.trim()
+    if (!body) return
+    const id = uidRef.current++
+    let start = Math.min(tRef.current, Math.max(0, dur - 1))
+    if (dur - start < 3) start = Math.max(0, dur - 5)
+    const len = Math.min(5, dur - start)
+    setTexts((l) => {
+      const k: TextClip = { id, text: body, start, dur: len, track: 0, x: 960, y: 540, size: 110, font: defaultFont(body), color: '#ffffff', bold: true }
+      let tr = 0
+      while (l.some((o) => overlaps({ ...k, track: tr }, o))) tr++
+      return [...l, { ...k, track: tr, y: 540 + [0, 150, -150, 300, -300][tr % 5] }]
+    })
+    setSel({ kind: 'text', id })
+    // show the new text right away (it fades in over its first moments)
+    tRef.current = Math.min(start + Math.min(1, len / 2), dur)
+    setT(tRef.current)
+  }
+  const removeSel = () => {
+    if (!sel) return
+    if (sel.kind === 'text') setTexts((l) => l.filter((k) => k.id !== sel.id))
+    else setAclips((l) => l.filter((c) => c.id !== sel.id))
+    setSel(null)
+  }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tg = e.target as HTMLElement
+      if (tg && /^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName)) return
+      if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
+        e.preventDefault()
+        removeSel()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  // ---- music ----
+  const wave = useMemo(() => (music ? peaks(music.buffer, 2400) : null), [music])
+  const addMusic = async (f: File) => {
+    try {
+      const m = await decodeFile(f)
+      setMusic(m)
+      setAclips([{ id: uidRef.current++, start: 0, inPt: 0, outPt: Math.min(m.buffer.duration, dur) }])
+      setMsg(null)
+    } catch {
+      setMsg({ type: 'err', text: t9.musicFail })
+    }
+  }
+  const patchAudio = (id: number, patch: Partial<AudioClip>) => setAclips((l) => l.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+  const fitAudio = () => {
+    if (!music) return
+    const base = aclips[0] ?? { inPt: 0, outPt: music.buffer.duration }
+    const seg = Math.max(0.5, base.outPt - base.inPt)
+    const out: AudioClip[] = []
+    for (let at = 0; at < dur - 0.05 && out.length < 60; at += seg) out.push({ id: uidRef.current++, start: at, inPt: base.inPt, outPt: base.inPt + Math.min(seg, dur - at) })
+    setAclips(out)
+    setSel(null)
+  }
+  const splitAudio = () => {
+    const at = tRef.current
+    const c = aclips.find((x) => at > x.start + 0.3 && at < x.start + clipLen(x) - 0.3)
+    if (!c) return
+    const cut = c.inPt + (at - c.start)
+    const b: AudioClip = { id: uidRef.current++, start: at, inPt: cut, outPt: c.outPt }
+    setAclips((l) => l.flatMap((x) => (x.id === c.id ? [{ ...x, outPt: cut }, b] : [x])))
+    setSel({ kind: 'audio', id: b.id })
   }
 
   /** Choosing a template from another occasion also swaps the sample text the user has not edited. */
   const pickTemplate = (id: string) => {
     const next = TEMPLATES.find((x) => x.id === id)
     if (!next) return
-    if (next.occasion !== occ) {
-      setData((d) => {
-        const from = sample(lang, d.kind, occ)
-        const to = sample(lang, d.kind, next.occasion)
-        const out = { ...d }
-        for (const k of ['headline', 'name1', 'connector', 'name2'] as const) if (d[k] === from[k]) out[k] = to[k]
-        return out
-      })
-    }
     if (next.sec) {
       setPhotos((l) => l.map((p) => ({ ...p, dur: next.sec! })))
       setAllSec(next.sec)
@@ -188,9 +267,6 @@ export default function App() {
     setTplId(id)
     setOccTab(next.occasion)
   }
-
-  const setStyle = (f: FieldKey, patch: Partial<FieldStyle>) => setStyles((s) => ({ ...s, [f]: { ...s[f], ...patch } }))
-  const st = styles[field] ?? {}
 
   const addFiles = async (files: FileList | File[]) => {
     const list = Array.from(files).filter((f) => f.type.startsWith('image/'))
@@ -219,8 +295,10 @@ export default function App() {
 
   const newProject = () => {
     if (!window.confirm(t9.confirmNew)) return
-    setData({ kind: 'intro', ...sample(lang, 'intro', 'wedding') })
-    setStyles({})
+    setTexts([])
+    setSel(null)
+    setMusic(null)
+    setAclips([])
     setPhotos([])
     setOverlays([])
     setCustoms([])
@@ -228,12 +306,11 @@ export default function App() {
     setLength(180)
     setTplId('wedding:1')
     setOccTab('wedding')
-    setWins({})
     setMsg(null)
   }
 
   const saveProject = async () => {
-    const fname = `${data.name1 || 'project'}-${data.name2 || ''}.nadiralbum`
+    const fname = 'nadir-project.nadiralbum'
     let handle: SaveHandle = null
     try {
       handle = await askSaveLocation(fname, '.nadiralbum')
@@ -243,12 +320,13 @@ export default function App() {
     }
     const file: ProjectFile = {
       app: 'nadir-photo-album',
-      version: 2,
+      version: 3,
       durs: photos.map((p) => p.dur),
-      wins,
       length,
-      data,
-      styles,
+      data: NO_DATA,
+      styles: NO_STYLES,
+      texts,
+      audio: music ? { name: music.name, dataUrl: music.dataUrl, volume: music.volume, clips: aclips } : null,
       tplId,
       photos: photos.map((p) => photoToDataUrl(p.pic)),
       overlays: overlays.map((o) => (o.custom === undefined ? o : { ...o, custom: customs.findIndex((c) => c.id === o.custom) })),
@@ -262,13 +340,20 @@ export default function App() {
   const openProject = async (f: File) => {
     try {
       const p = await parseProject(f)
-      setData({ ...p.data, kind: 'intro' })
-      setStyles(p.styles)
+      setTexts(p.texts)
+      setSel(null)
+      uidRef.current = Math.max(uidRef.current, ...p.texts.map((k) => k.id + 1), ...(p.audio?.clips.map((c) => c.id + 1) ?? [0]))
+      if (p.audio) {
+        setMusic(await decodeDataUrl(p.audio.name, p.audio.dataUrl, p.audio.volume))
+        setAclips(p.audio.clips)
+      } else {
+        setMusic(null)
+        setAclips([])
+      }
       const id = resolveId(p.tplId)
       const known = TEMPLATES.find((x) => x.id === id)
       setTplId(known ? id : 'wedding:1')
       setOccTab(known ? known.occasion : 'wedding')
-      setWins(p.wins)
       setLength(p.length)
       setPhotos(p.photos.map((x, i) => ({ id: idRef.current++, ...x, dur: p.durs[i] ?? DEFAULT_PHOTO_SEC })))
       const cs = p.customs.map((x) => ({ id: idRef.current++, ...x }))
@@ -311,7 +396,7 @@ export default function App() {
       setMsg({ type: 'err', text: t9.noWebcodecs })
       return
     }
-    const fname = `${data.kind}-${data.name1 || 'video'}-${data.name2 || ''}.mp4`
+    const fname = 'nadir-video.mp4'
     let handle: SaveHandle = null
     try {
       handle = await askSaveLocation(fname, '.mp4')
@@ -325,7 +410,9 @@ export default function App() {
     abort.current = new AbortController()
     const h = quality === '1080' ? 1080 : 720
     try {
+      const audio = music && aclips.length ? await mixdown(music, aclips, dur) : null
       const { blob, codec } = await exportMp4({
+        audio,
         tpl,
         rc,
         width: (h * 16) / 9,
@@ -341,6 +428,7 @@ export default function App() {
       const m = String((e as Error)?.message ?? e)
       if (m === 'ABORTED') setMsg({ type: 'err', text: t9.aborted })
       else if (m === 'NO_ENCODER') setMsg({ type: 'err', text: t9.noEncoder })
+      else if (m === 'NO_AUDIO_ENCODER') setMsg({ type: 'err', text: t9.noAudioEnc })
       else setMsg({ type: 'err', text: t9.exportFail + m })
     } finally {
       setBusy(false)
@@ -355,20 +443,6 @@ export default function App() {
       </option>
     ))
 
-  const hitAt = (e: React.PointerEvent) => {
-    const cv = stage.current
-    if (!cv) return null
-    const b = cv.getBoundingClientRect()
-    const px = ((e.clientX - b.left) * cv.width) / b.width
-    const py = ((e.clientY - b.top) * cv.height) / b.height
-    for (let i = hits.current.length - 1; i >= 0; i--) {
-      const h = hits.current[i]
-      if (px >= h.x && px <= h.x + h.w && py >= h.y && py <= h.y + h.h) return h
-    }
-    return null
-  }
-  const dragText = useRef<{ f: FieldKey; x: number; y: number; dx: number; dy: number } | null>(null)
-
   const seek = (v: number) => {
     setPlaying(false)
     tRef.current = Math.min(Math.max(0, v), dur)
@@ -382,10 +456,11 @@ export default function App() {
     ['photos', t9.tabPhotos],
     ['overlays', t9.tabOverlays],
     ['motion', t9.tabMotion],
+    ['music', t9.tabMusic],
   ]
   const buildRc = useCallback(
-    (tp: (typeof TEMPLATES)[number]) => makeRenderCtx(data, photos.map((p) => p.pic), styles, { transition, durs: photos.map((p) => p.dur), tpl: tp, length: 0 }),
-    [data, photos, styles, transition],
+    (tp: (typeof TEMPLATES)[number]) => makeRenderCtx(NO_DATA, photos.map((p) => p.pic), NO_STYLES, { transition, durs: photos.map((p) => p.dur), tpl: tp, length: 0 }),
+    [photos, transition],
   )
 
   return (
@@ -427,7 +502,15 @@ export default function App() {
       <aside className="panel">
         <div className="tabs" role="tablist">
           {tabs.map(([id, label]) => (
-            <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => {
+                setTab(id)
+                if (id === 'text') setModal('')
+              }}
+            >
               {label}
             </button>
           ))}
@@ -441,66 +524,71 @@ export default function App() {
 
           {tab === 'text' && (
             <>
-              <div className="chips" role="tablist">
-                {FIELDS.map((k) => (
-                  <button key={k} role="tab" aria-selected={field === k} onClick={() => setField(k)}>
-                    {t9[k].replace(/\s*\(.*\)/, '')}
-                  </button>
+              <button className="go wide" onClick={() => setModal('')}>
+                {t9.addText}
+              </button>
+              <b className="sub">{t9.textsList}</b>
+              {texts.length === 0 && <small>{t9.noTexts}</small>}
+              <ul className="tlist">
+                {texts.map((k) => (
+                  <li key={k.id}>
+                    <button className={sel?.kind === 'text' && sel.id === k.id ? 'on' : ''} onClick={() => { setSel({ kind: 'text', id: k.id }); seek(k.start + 0.5) }}>
+                      <span>{k.text.replace(/\n/g, ' ')}</span>
+                      <small>
+                        {fmt(k.start)} · {t9.tlTrack} {k.track + 2}
+                      </small>
+                    </button>
+                  </li>
                 ))}
-              </div>
-              <label className="f">
-                <span>{t9[field]}</span>
-                <input value={data[field]} onChange={set(field)} />
-              </label>
-              <label className="f">
-                <span>{t9.font}</span>
-                <select value={st.font ?? ''} onChange={(e) => setStyle(field, { font: e.target.value })}>
-                  <option value="">{t9.fontDefault}</option>
-                  <optgroup label={t9.fontsAr}>{fontOpts('ar')}</optgroup>
-                  <optgroup label={t9.fontsLat}>{fontOpts('lat')}</optgroup>
-                </select>
-              </label>
-              <div className="f">
-                <span>
-                  {t9.size} ({Math.round((st.scale ?? 1) * 100)}%)
-                </span>
-                <div className="sizerow">
-                  <button onClick={() => setStyle(field, { scale: Math.max(0.3, +((st.scale ?? 1) - 0.1).toFixed(2)) })} aria-label={t9.smaller}>
-                    A−
+              </ul>
+              {selText && (
+                <div className="ov">
+                  <label className="f">
+                    <span>{t9.textEdit}</span>
+                    <textarea rows={3} value={selText.text} onChange={(e) => patchText(selText.id, { text: e.target.value })} />
+                  </label>
+                  <label className="f">
+                    <span>{t9.font}</span>
+                    <select value={selText.font} onChange={(e) => patchText(selText.id, { font: e.target.value })}>
+                      <optgroup label={t9.fontsAr}>{fontOpts('ar')}</optgroup>
+                      <optgroup label={t9.fontsLat}>{fontOpts('lat')}</optgroup>
+                    </select>
+                  </label>
+                  <div className="f">
+                    <span>
+                      {t9.size} ({Math.round(selText.size)})
+                    </span>
+                    <input type="range" min={20} max={400} step={2} value={selText.size} onChange={(e) => patchText(selText.id, { size: Number(e.target.value) })} />
+                  </div>
+                  <div className="row2">
+                    <label className="f">
+                      <span>{t9.color}</span>
+                      <input type="color" value={selText.color} onChange={(e) => patchText(selText.id, { color: e.target.value })} />
+                    </label>
+                    <label className="chk">
+                      <input type="checkbox" checked={selText.bold} onChange={(e) => patchText(selText.id, { bold: e.target.checked })} />
+                      {t9.bold}
+                    </label>
+                  </div>
+                  <div className="row2">
+                    <label className="f">
+                      <span>{t9.startAt}</span>
+                      <input type="number" min={0} max={Math.max(0, dur - 0.5)} step={0.5} value={+selText.start.toFixed(1)} onChange={(e) => patchText(selText.id, { start: Math.min(Math.max(0, Number(e.target.value) || 0), Math.max(0, dur - 0.5)) })} onBlur={() => settle(selText.id)} />
+                    </label>
+                    <label className="f">
+                      <span>{t9.textLen}</span>
+                      <input type="number" min={0.5} max={dur} step={0.5} value={+selText.dur.toFixed(1)} onChange={(e) => patchText(selText.id, { dur: Math.min(Math.max(0.5, Number(e.target.value) || 0.5), dur - selText.start) })} onBlur={() => settle(selText.id)} />
+                    </label>
+                  </div>
+                  <button className="ghost" onClick={() => patchText(selText.id, { x: 960, y: 540 })}>
+                    {t9.resetPos}
                   </button>
-                  <input type="range" min={0.3} max={2.5} step={0.05} value={st.scale ?? 1} onChange={(e) => setStyle(field, { scale: Number(e.target.value) })} />
-                  <button onClick={() => setStyle(field, { scale: Math.min(2.5, +((st.scale ?? 1) + 0.1).toFixed(2)) })} aria-label={t9.bigger}>
-                    A+
+                  <button className="ghost danger" onClick={removeSel}>
+                    {t9.delClip}
                   </button>
                 </div>
-              </div>
-              <div className="row2">
-                <label className="f">
-                  <span>{t9.color}</span>
-                  <input type="color" value={st.color || '#ffffff'} onChange={(e) => setStyle(field, { color: e.target.value })} />
-                </label>
-                <label className="chk">
-                  <input type="checkbox" checked={!!st.bold} onChange={(e) => setStyle(field, { bold: e.target.checked })} />
-                  {t9.bold}
-                </label>
-              </div>
-              <label className="f">
-                <span>{t9.offX}</span>
-                <input type="range" min={-1000} max={1000} step={5} value={st.dx ?? 0} onChange={(e) => setStyle(field, { dx: Number(e.target.value) })} />
-              </label>
-              <label className="f">
-                <span>{t9.offY}</span>
-                <input type="range" min={-600} max={600} step={5} value={st.dy ?? 0} onChange={(e) => setStyle(field, { dy: Number(e.target.value) })} />
-              </label>
-              <small className="hint">{t9.textHint}</small>
-              <div className="row2">
-                <button className="ghost" onClick={() => setStyle(field, { dx: 0, dy: 0 })}>
-                  {t9.resetPos}
-                </button>
-                <button className="ghost" onClick={() => setStyles((s) => ({ ...s, [field]: {} }))}>
-                  {t9.reset}
-                </button>
-              </div>
+              )}
+              <small className="hint">{t9.textSelectHint}</small>
             </>
           )}
 
@@ -631,6 +719,62 @@ export default function App() {
             </>
           )}
 
+          {tab === 'music' && (
+            <>
+              <label className="btn wide">
+                {music ? t9.musicChange : t9.musicPick}
+                <input
+                  type="file"
+                  accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) addMusic(f)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+              {!music && <small>{t9.musicNone}</small>}
+              {music && (
+                <div className="ov">
+                  <div className="ovhead">
+                    <span>♪ {music.name}</span>
+                    <button
+                      aria-label={t9.musicRemove}
+                      title={t9.musicRemove}
+                      onClick={() => {
+                        setMusic(null)
+                        setAclips([])
+                        setSel(null)
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <small>
+                    {fmt(music.buffer.duration)} · {aclips.length}
+                  </small>
+                  <label className="f">
+                    <span>
+                      {t9.musicVolume} ({Math.round(music.volume * 100)}%)
+                    </span>
+                    <input type="range" min={0} max={1} step={0.05} value={music.volume} onChange={(e) => setMusic({ ...music, volume: Number(e.target.value) })} />
+                  </label>
+                  <button className="ghost" onClick={fitAudio}>
+                    {t9.musicFit}
+                  </button>
+                  <button className="ghost" onClick={splitAudio}>
+                    {t9.musicSplit}
+                  </button>
+                  <button className="ghost danger" disabled={sel?.kind !== 'audio'} onClick={removeSel}>
+                    {t9.musicDelClip}
+                  </button>
+                </div>
+              )}
+              <small className="hint">{t9.musicHint}</small>
+            </>
+          )}
+
           {tab === 'motion' && (
             <div className="trs" role="radiogroup" aria-label={t9.transition}>
               {TRANSITIONS.map((k) => (
@@ -645,30 +789,62 @@ export default function App() {
 
       <main className="main">
         <div className="stage">
-          <canvas
-            ref={stage}
-            width={960}
-            height={540}
-            onPointerDown={(e) => {
-              const h = hitAt(e)
-              if (!h) return
-              setField(h.f)
-              const s0 = styles[h.f]
-              dragText.current = { f: h.f, x: e.clientX, y: e.clientY, dx: s0?.dx ?? 0, dy: s0?.dy ?? 0 }
-              e.currentTarget.setPointerCapture(e.pointerId)
-            }}
-            onPointerMove={(e) => {
-              const d = dragText.current
-              const cv = e.currentTarget
-              if (d) {
-                const k = 1920 / cv.getBoundingClientRect().width
-                setStyle(d.f, { dx: Math.round(d.dx + (e.clientX - d.x) * k), dy: Math.round(d.dy + (e.clientY - d.y) * k) })
-              } else cv.style.cursor = hitAt(e) ? 'move' : 'default'
-            }}
-            onPointerUp={() => {
-              dragText.current = null
-            }}
-          />
+          <canvas ref={stage} width={960} height={540} onPointerDown={() => setSel(null)} />
+          <div className="sel-layer">
+            {texts
+              .filter((k) => k.text.trim() && activeAt(k, t))
+              .sort((x, y) => x.track - y.track)
+              .map((k) => {
+                const bx = boxOf(k)
+                const on = sel?.kind === 'text' && sel.id === k.id
+                return (
+                  <div
+                    key={k.id}
+                    className={'tbox' + (on ? ' on' : '')}
+                    style={{ left: `${(bx.x / 1920) * 100}%`, top: `${(bx.y / 1080) * 100}%`, width: `${(bx.w / 1920) * 100}%`, height: `${(bx.h / 1080) * 100}%` }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      setSel({ kind: 'text', id: k.id })
+                      const r = stage.current!.getBoundingClientRect()
+                      const kx = 1920 / r.width
+                      const x0 = e.clientX, y0 = e.clientY, ox = k.x, oy = k.y
+                      const mv = (ev: PointerEvent) => patchText(k.id, { x: Math.round(ox + (ev.clientX - x0) * kx), y: Math.round(oy + (ev.clientY - y0) * kx) })
+                      const up = () => {
+                        window.removeEventListener('pointermove', mv)
+                        window.removeEventListener('pointerup', up)
+                      }
+                      window.addEventListener('pointermove', mv)
+                      window.addEventListener('pointerup', up)
+                    }}
+                  >
+                    {on &&
+                      (['nw', 'ne', 'sw', 'se'] as const).map((c) => (
+                        <i
+                          key={c}
+                          className={'h ' + c}
+                          onPointerDown={(e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            const r = stage.current!.getBoundingClientRect()
+                            const cx = r.left + (k.x / 1920) * r.width
+                            const cy = r.top + (k.y / 1080) * r.height
+                            const d0 = Math.max(10, Math.hypot(e.clientX - cx, e.clientY - cy))
+                            const s0 = k.size
+                            const mv = (ev: PointerEvent) => patchText(k.id, { size: Math.round(Math.min(500, Math.max(16, (s0 * Math.hypot(ev.clientX - cx, ev.clientY - cy)) / d0))) })
+                            const up = () => {
+                              window.removeEventListener('pointermove', mv)
+                              window.removeEventListener('pointerup', up)
+                            }
+                            window.addEventListener('pointermove', mv)
+                            window.addEventListener('pointerup', up)
+                          }}
+                        />
+                      ))}
+                  </div>
+                )
+              })}
+          </div>
           {!ready && <div className="loading">{t9.loadingFonts}</div>}
         </div>
         <div className="bar">
@@ -708,10 +884,13 @@ export default function App() {
           playing={playing}
           photos={photos.map((p) => ({ id: p.id, thumb: p.thumb, dur: p.dur }))}
           editable={long}
-          wins={rc.win}
-          texts={data}
-          field={field}
-          onField={setField}
+          texts={texts}
+          audio={music && wave ? { name: music.name, duration: music.buffer.duration, peaks: wave, clips: aclips } : null}
+          sel={sel}
+          onSel={setSel}
+          onText={patchText}
+          onSettle={settle}
+          onAudioClip={patchAudio}
           onSeek={seek}
           onDur={setDur}
           length={length}
@@ -719,11 +898,43 @@ export default function App() {
           extra={rc.durs.slice(rc.real).map((d, i) => ({ dur: d, thumb: photos[(rc.real + i) % Math.max(1, photos.length)]?.thumb ?? '' }))}
           onDurAll={(d) => setPhotos((l) => l.map((p) => ({ ...p, dur: d })))}
           onRemove={(id) => setPhotos((l) => l.filter((p) => p.id !== id))}
-          onWin={(f, w) => setWins((x) => ({ ...x, [f]: w }))}
         />
 
         {msg && <p className={'msg ' + msg.type}>{msg.text}</p>}
       </main>
+      {modal !== null && (
+        <div className="modal-bg" onPointerDown={() => setModal(null)}>
+          <div className="modal" role="dialog" aria-label={t9.textModalTitle} onPointerDown={(e) => e.stopPropagation()}>
+            <h3>{t9.textModalTitle}</h3>
+            <textarea
+              autoFocus
+              value={modal}
+              placeholder={t9.textPlaceholder}
+              onChange={(e) => setModal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  addText(modal)
+                  setModal(null)
+                } else if (e.key === 'Escape') setModal(null)
+              }}
+            />
+            <div className="acts">
+              <button onClick={() => setModal(null)}>{t9.cancel}</button>
+              <button
+                className="go"
+                disabled={!modal.trim()}
+                onClick={() => {
+                  addText(modal)
+                  setModal(null)
+                }}
+              >
+                {t9.ok}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

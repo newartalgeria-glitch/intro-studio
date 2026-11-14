@@ -51,7 +51,11 @@ export interface Pic {
   h: number
 }
 
+import type { TextClip } from './textclips'
+
 export interface RenderCtx {
+  /** free text layers, drawn above everything except the final fade */
+  texts: TextClip[]
   /** logical size - templates always draw in 1920x1080 space */
   W: number
   H: number

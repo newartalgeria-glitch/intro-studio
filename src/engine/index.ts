@@ -3,6 +3,8 @@ import { drawOverlays } from './overlays'
 import { CATALOG } from './catalog'
 import { placeholders } from './pics'
 import { DEFAULT_PHOTO_SEC } from './long'
+import { drawTexts } from './textclips'
+import type { TextClip } from './textclips'
 import { reset, seg, setActiveStyles, setActiveTimes } from './util'
 
 export const TEMPLATES: Template[] = CATALOG
@@ -16,6 +18,8 @@ export type { Hit } from './util'
 export { DEFAULT_PHOTO_SEC } from './long'
 export type { IntroData, Pic, RenderCtx, Template, Kind, FieldKey, FieldStyle, FieldStyles } from './types'
 export { FONTS } from './fonts'
+export { boxOf, activeAt, defaultFont } from './textclips'
+export type { TextClip, Box } from './textclips'
 export { PRESETS, SHAPES, MOTIONS, drawPreset } from './overlays'
 export type { Preset } from './overlays'
 export type { OverlayItem, Transition, Motion, Shape } from './types'
@@ -34,6 +38,7 @@ export interface Extras {
   /** user-moved text windows */
   wins?: Partial<Wins>
   tpl?: Template
+  texts?: TextClip[]
 }
 
 const FIELDS: FieldKey[] = ['headline', 'name1', 'connector', 'name2', 'date', 'place', 'footer']
@@ -54,6 +59,7 @@ export function makeRenderCtx(data: IntroData, photos: Pic[], styles: FieldStyle
     }
   }
   const r: RenderCtx = {
+    texts: x.texts ?? [],
     W: 1920,
     H: 1080,
     data,
@@ -97,6 +103,8 @@ export function renderFrame(
   tpl.render(c, t, rc)
   reset(c)
   drawOverlays(c, t, rc)
+  reset(c)
+  drawTexts(c, t, rc.texts)
   reset(c)
   const dur = tpl.duration(rc)
   const a = Math.max(1 - seg(t, 0, 0.35), seg(t, dur - 0.6, dur))

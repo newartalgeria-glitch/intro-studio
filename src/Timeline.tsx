@@ -1,15 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
-import type { FieldKey, Wins } from './engine'
+import type { TextClip } from './engine'
+import type { AudioClip } from './audio'
+import { clipLen } from './audio'
 import type { DICT } from './i18n'
 
-const FIELDS: FieldKey[] = ['headline', 'name1', 'connector', 'name2', 'date', 'place', 'footer']
 const LAB = 74
+const ROW = 30
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
 export interface TlPhoto {
   id: number
   thumb: string
   dur: number
+}
+export type Sel = { kind: 'text' | 'audio'; id: number } | null
+
+export interface TlAudio {
+  name: string
+  duration: number
+  peaks: Float32Array
+  clips: AudioClip[]
 }
 
 interface Props {
@@ -20,10 +30,10 @@ interface Props {
   photos: TlPhoto[]
   /** long templates let the user time every photo; short ones do it themselves */
   editable: boolean
-  wins: Wins
-  texts: Record<FieldKey, string>
-  field: FieldKey
-  onField: (f: FieldKey) => void
+  texts: TextClip[]
+  audio: TlAudio | null
+  sel: Sel
+  onSel: (s: Sel) => void
   onSeek: (t: number) => void
   onDur: (id: number, d: number) => void
   length: number
@@ -31,7 +41,32 @@ interface Props {
   extra: { dur: number; thumb: string }[]
   onDurAll: (d: number) => void
   onRemove: (id: number) => void
-  onWin: (f: FieldKey, w: [number, number]) => void
+  onText: (id: number, patch: Partial<TextClip>) => void
+  /** called when a drag ends so overlapping clips can be moved to a free track */
+  onSettle: (id: number) => void
+  onAudioClip: (id: number, patch: Partial<AudioClip>) => void
+}
+
+function Wave({ peaks, duration, inPt, outPt, w }: { peaks: Float32Array; duration: number; inPt: number; outPt: number; w: number }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const cv = ref.current
+    if (!cv) return
+    const cw = Math.max(1, Math.min(3000, Math.round(w)))
+    cv.width = cw
+    cv.height = ROW - 6
+    const c = cv.getContext('2d')!
+    c.clearRect(0, 0, cw, cv.height)
+    c.fillStyle = 'rgba(255,255,255,.85)'
+    const n = peaks.length
+    for (let x = 0; x < cw; x++) {
+      const tt = inPt + ((outPt - inPt) * x) / cw
+      const v = peaks[Math.min(n - 1, Math.floor((tt / duration) * n))] ?? 0
+      const h = Math.max(1, v * (cv.height - 2))
+      c.fillRect(x, (cv.height - h) / 2, 1, h)
+    }
+  }, [peaks, duration, inPt, outPt, w])
+  return <canvas ref={ref} style={{ width: '100%', height: '100%', pointerEvents: 'none' }} />
 }
 
 export function Timeline(p: Props) {
@@ -68,14 +103,16 @@ export function Timeline(p: Props) {
     if (x < el.scrollLeft || x > el.scrollLeft + vw - 40) el.scrollLeft = Math.max(0, x - 60)
   }, [t, px, vw, zoom, p.playing])
 
-  const drag = (e: React.PointerEvent, move: (dt: number) => void) => {
+  const drag = (e: React.PointerEvent, move: (dt: number, dy: number) => void, done?: () => void) => {
     e.stopPropagation()
     e.preventDefault()
     const x0 = e.clientX
-    const mv = (ev: PointerEvent) => move((ev.clientX - x0) / px)
+    const y0 = e.clientY
+    const mv = (ev: PointerEvent) => move((ev.clientX - x0) / px, ev.clientY - y0)
     const up = () => {
       window.removeEventListener('pointermove', mv)
       window.removeEventListener('pointerup', up)
+      done?.()
     }
     window.addEventListener('pointermove', mv)
     window.addEventListener('pointerup', up)
@@ -98,6 +135,8 @@ export function Timeline(p: Props) {
   const ticks: number[] = []
   for (let s = 0; s <= total; s += step) ticks.push(s)
 
+  const maxTr = p.texts.reduce((m, k) => Math.max(m, k.track), -1)
+  const nTracks = Math.max(3, maxTr + 2)
   let acc = 0
   const clips = p.photos.map((ph) => {
     const start = acc
@@ -143,7 +182,7 @@ export function Timeline(p: Props) {
           </div>
 
           <div className="tlrow">
-            <div className="tllab">{t9.tlPhotos}</div>
+            <div className="tllab">{t9.tlTrack} 1</div>
             <div className="tllane photo" style={{ width }} onPointerDown={seekAt}>
               {p.photos.length === 0 && <div className="clip ghost" style={{ left: 0, width }}>{t9.tlSample}</div>}
               {p.editable &&
@@ -185,34 +224,92 @@ export function Timeline(p: Props) {
           </div>
           {!p.editable && p.photos.length > 0 && <div className="tlnote">{t9.tlLegacyNote}</div>}
 
-          {FIELDS.map((f) => {
-            const [s, e] = p.wins[f]
-            return (
-              <div key={f} className={'tlrow' + (p.field === f ? ' sel' : '')}>
-                <div className="tllab" onClick={() => p.onField(f)}>
-                  {t9[f].replace(/\s*\(.*\)/, '')}
-                </div>
-                <div className="tllane" style={{ width }} onPointerDown={seekAt}>
+          {Array.from({ length: nTracks }, (_, tr) => (
+            <div key={'tt' + tr} className="tlrow">
+              <div className="tllab">
+                {t9.tlTrack} {tr + 2}
+              </div>
+              <div className="tllane" style={{ width }} onPointerDown={(e) => { p.onSel(null); seekAt(e) }}>
+                {p.texts
+                  .filter((k) => k.track === tr)
+                  .map((k) => {
+                    const on = p.sel?.kind === 'text' && p.sel.id === k.id
+                    return (
+                      <div
+                        key={k.id}
+                        className={'clip txt' + (on ? ' on' : '')}
+                        style={{ left: k.start * px, width: Math.max(10, k.dur * px) }}
+                        title={`${fmt(k.start)} → ${fmt(k.start + k.dur)}`}
+                        onPointerDown={(ev) => {
+                          p.onSel({ kind: 'text', id: k.id })
+                          const s0 = k.start
+                          const tr0 = k.track
+                          drag(
+                            ev,
+                            (dt, dy) =>
+                              p.onText(k.id, {
+                                start: clamp(Math.round((s0 + dt) * 10) / 10, 0, Math.max(0, total - k.dur)),
+                                track: Math.max(0, tr0 + Math.round(dy / ROW)),
+                              }),
+                            () => p.onSettle(k.id),
+                          )
+                        }}
+                      >
+                        <i className="grip l" onPointerDown={(ev) => { p.onSel({ kind: 'text', id: k.id }); const s0 = k.start, e0 = k.start + k.dur; drag(ev, (dt) => { const ns = clamp(Math.round((s0 + dt) * 10) / 10, 0, e0 - 0.5); p.onText(k.id, { start: ns, dur: e0 - ns }) }, () => p.onSettle(k.id)) }} />
+                        <span>{k.text.replace(/\n/g, ' ')}</span>
+                        <i className="grip" onPointerDown={(ev) => { p.onSel({ kind: 'text', id: k.id }); const d0 = k.dur; drag(ev, (dt) => p.onText(k.id, { dur: clamp(Math.round((d0 + dt) * 10) / 10, 0.5, total - k.start) }), () => p.onSettle(k.id)) }} />
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          ))}
+
+          <div className="tlrow aud">
+            <div className="tllab">♪ {t9.tlTrack} {nTracks + 2}</div>
+            <div className="tllane" style={{ width }} onPointerDown={(e) => { p.onSel(null); seekAt(e) }}>
+              {!p.audio && <div className="clip ghost" style={{ left: 0, width: Math.min(width, 340) }}>{t9.tlAudio}: {t9.musicNone}</div>}
+              {p.audio?.clips.map((c) => {
+                const on = p.sel?.kind === 'audio' && p.sel.id === c.id
+                const a = p.audio!
+                const w = clipLen(c) * px
+                return (
                   <div
-                    className="clip txt"
-                    style={{ left: s * px, width: Math.max(8, (e - s) * px) }}
+                    key={c.id}
+                    className={'clip aud' + (on ? ' on' : '')}
+                    style={{ left: c.start * px, width: Math.max(10, w) }}
+                    title={`${a.name} · ${fmt(c.start)} → ${fmt(c.start + clipLen(c))}`}
                     onPointerDown={(ev) => {
-                      p.onField(f)
-                      const len = e - s
-                      drag(ev, (dt) => {
-                        const ns = clamp(s + dt, 0, total - len)
-                        p.onWin(f, [ns, ns + len])
-                      })
+                      p.onSel({ kind: 'audio', id: c.id })
+                      const s0 = c.start
+                      drag(ev, (dt) => p.onAudioClip(c.id, { start: clamp(Math.round((s0 + dt) * 10) / 10, 0, Math.max(0, total - 0.5)) }))
                     }}
                   >
-                    <i className="grip l" onPointerDown={(ev) => { p.onField(f); drag(ev, (dt) => p.onWin(f, [clamp(s + dt, 0, e - 0.5), e])) }} />
-                    <span>{p.texts[f] || t9[f]}</span>
-                    <i className="grip" onPointerDown={(ev) => { p.onField(f); drag(ev, (dt) => p.onWin(f, [s, clamp(e + dt, s + 0.5, total)])) }} />
+                    <Wave peaks={a.peaks} duration={a.duration} inPt={c.inPt} outPt={c.outPt} w={w} />
+                    <i
+                      className="grip l"
+                      onPointerDown={(ev) => {
+                        p.onSel({ kind: 'audio', id: c.id })
+                        const i0 = c.inPt, s0 = c.start, o0 = c.outPt
+                        drag(ev, (dt) => {
+                          const d = clamp(dt, -Math.min(i0, s0), o0 - i0 - 0.5)
+                          p.onAudioClip(c.id, { inPt: i0 + d, start: s0 + d })
+                        })
+                      }}
+                    />
+                    <i
+                      className="grip"
+                      onPointerDown={(ev) => {
+                        p.onSel({ kind: 'audio', id: c.id })
+                        const o0 = c.outPt
+                        drag(ev, (dt) => p.onAudioClip(c.id, { outPt: clamp(o0 + dt, c.inPt + 0.5, a.duration) }))
+                      }}
+                    />
                   </div>
-                </div>
-              </div>
-            )
-          })}
+                )
+              })}
+            </div>
+          </div>
           <div className="playhead" style={{ left: LAB + t * px }} />
         </div>
       </div>
