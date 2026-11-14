@@ -22,24 +22,11 @@ export function photoToDataUrl(p: Pic) {
   return (p.src as HTMLCanvasElement).toDataURL('image/jpeg', 0.92)
 }
 
-type Picker = (o: object) => Promise<{ createWritable: () => Promise<{ write: (b: Blob) => Promise<void>; close: () => Promise<void> }> }>
-const pickerOf = () => (window as unknown as { showSaveFilePicker?: Picker }).showSaveFilePicker
-
-/** Asks "where to save?" (Chrome/Edge). Must be called straight from a click.
- *  Returns null when the dialog is unavailable or fails at once (then the normal download is used),
- *  throws 'CANCEL' only when the user really closed the dialog. */
-export async function askSaveLocation(name: string, ext: '.mp4' | '.nadiralbum') {
-  const pick = pickerOf()
-  if (!pick) return null
-  const t0 = Date.now()
-  try {
-    const types = ext === '.mp4' ? [{ description: 'MP4', accept: { 'video/mp4': ['.mp4'] } }] : [{ description: 'Nadir Photo Album', accept: { 'application/octet-stream': ['.nadiralbum'] } }]
-    return await pick.call(window, { suggestedName: name.replace(/[\\/:*?"<>|]/g, '_'), types })
-  } catch (e) {
-    // a dialog the user dismissed takes a moment; an instant refusal means the browser would not open it
-    if ((e as Error)?.name === 'AbortError' && Date.now() - t0 > 700) throw new Error('CANCEL')
-    return null
-  }
+type Writable = { write: (b: Blob) => Promise<void>; close: () => Promise<void> }
+/** The in-page "save as" dialog proved unreliable, so files go through the normal download
+ *  (Chrome's own "ask where to save each file" setting then decides the folder). */
+export async function askSaveLocation(_name: string, _ext: '.mp4' | '.nadiralbum'): Promise<{ createWritable: () => Promise<Writable> } | null> {
+  return null
 }
 export type SaveHandle = Awaited<ReturnType<typeof askSaveLocation>>
 
@@ -54,7 +41,17 @@ export async function writeTo(h: SaveHandle, blob: Blob, name: string) {
   }
 }
 
-export function download(blob: Blob, name: string) {
+/** Arabic/bidi characters in a file name make some browsers drop the name entirely, so keep it plain ASCII. */
+const plainName = (name: string) => {
+  const ext = name.slice(name.lastIndexOf('.'))
+  const stem = name.slice(0, name.lastIndexOf('.')).replace(/[^\x20-\x7e]/g, '').replace(/[\\/:*?"<>|]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '').trim()
+  const d = new Date()
+  const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`
+  return `${stem.length > 2 ? stem : 'nadir-album'}-${stamp}${ext}`
+}
+
+export function download(blob: Blob, rawName: string) {
+  const name = plainName(rawName)
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = name
