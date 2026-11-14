@@ -238,6 +238,7 @@ export default function App() {
     try {
       handle = await askSaveLocation(fname, '.nadiralbum')
     } catch {
+      setMsg({ type: 'err', text: t9.saveCancelled })
       return
     }
     const file: ProjectFile = {
@@ -315,6 +316,7 @@ export default function App() {
     try {
       handle = await askSaveLocation(fname, '.mp4')
     } catch {
+      setMsg({ type: 'err', text: t9.saveCancelled })
       return
     }
     setPlaying(false)

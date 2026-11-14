@@ -25,15 +25,19 @@ export function photoToDataUrl(p: Pic) {
 type Picker = (o: object) => Promise<{ createWritable: () => Promise<{ write: (b: Blob) => Promise<void>; close: () => Promise<void> }> }>
 const pickerOf = () => (window as unknown as { showSaveFilePicker?: Picker }).showSaveFilePicker
 
-/** Asks "where to save?" (Chrome/Edge). Must be called straight from a click. Returns null if unsupported, throws 'CANCEL' if dismissed. */
+/** Asks "where to save?" (Chrome/Edge). Must be called straight from a click.
+ *  Returns null when the dialog is unavailable or fails at once (then the normal download is used),
+ *  throws 'CANCEL' only when the user really closed the dialog. */
 export async function askSaveLocation(name: string, ext: '.mp4' | '.nadiralbum') {
   const pick = pickerOf()
   if (!pick) return null
+  const t0 = Date.now()
   try {
-    const types = ext === '.mp4' ? [{ description: 'MP4', accept: { 'video/mp4': ['.mp4'] } }] : [{ description: 'Nadir Photo Album', accept: { 'application/json': ['.nadiralbum'] } }]
-    return await pick.call(window, { suggestedName: name, types })
+    const types = ext === '.mp4' ? [{ description: 'MP4', accept: { 'video/mp4': ['.mp4'] } }] : [{ description: 'Nadir Photo Album', accept: { 'application/octet-stream': ['.nadiralbum'] } }]
+    return await pick.call(window, { suggestedName: name.replace(/[\\/:*?"<>|]/g, '_'), types })
   } catch (e) {
-    if ((e as Error)?.name === 'AbortError') throw new Error('CANCEL')
+    // a dialog the user dismissed takes a moment; an instant refusal means the browser would not open it
+    if ((e as Error)?.name === 'AbortError' && Date.now() - t0 > 700) throw new Error('CANCEL')
     return null
   }
 }
@@ -41,9 +45,13 @@ export type SaveHandle = Awaited<ReturnType<typeof askSaveLocation>>
 
 export async function writeTo(h: SaveHandle, blob: Blob, name: string) {
   if (!h) return download(blob, name)
-  const w = await h.createWritable()
-  await w.write(blob)
-  await w.close()
+  try {
+    const w = await h.createWritable()
+    await w.write(blob)
+    await w.close()
+  } catch {
+    download(blob, name)
+  }
 }
 
 export function download(blob: Blob, name: string) {
