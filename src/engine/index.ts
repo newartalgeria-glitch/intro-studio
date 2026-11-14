@@ -43,7 +43,7 @@ export function makeRenderCtx(data: IntroData, photos: Pic[], styles: FieldStyle
   const real = photos.length > 0
   const base = real ? photos.map((_, i) => x.durs?.[i] ?? DEFAULT_PHOTO_SEC) : [5, 5, 5, 5, 5, 5]
   const durs = [...base]
-  const want = x.tpl?.kind === 'long' ? x.length ?? 0 : 0
+  const want = x.tpl?.kind === 'long' && x.length ? x.length - 2 : 0
   if (want > 0) {
     let sum = durs.reduce((a, b) => a + b, 0)
     for (let i = 0; sum < want - 0.5 && i < 400; i++) {

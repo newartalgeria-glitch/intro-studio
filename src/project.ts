@@ -22,6 +22,30 @@ export function photoToDataUrl(p: Pic) {
   return (p.src as HTMLCanvasElement).toDataURL('image/jpeg', 0.92)
 }
 
+type Picker = (o: object) => Promise<{ createWritable: () => Promise<{ write: (b: Blob) => Promise<void>; close: () => Promise<void> }> }>
+const pickerOf = () => (window as unknown as { showSaveFilePicker?: Picker }).showSaveFilePicker
+
+/** Asks "where to save?" (Chrome/Edge). Must be called straight from a click. Returns null if unsupported, throws 'CANCEL' if dismissed. */
+export async function askSaveLocation(name: string, ext: '.mp4' | '.nadiralbum') {
+  const pick = pickerOf()
+  if (!pick) return null
+  try {
+    const types = ext === '.mp4' ? [{ description: 'MP4', accept: { 'video/mp4': ['.mp4'] } }] : [{ description: 'Nadir Photo Album', accept: { 'application/json': ['.nadiralbum'] } }]
+    return await pick.call(window, { suggestedName: name, types })
+  } catch (e) {
+    if ((e as Error)?.name === 'AbortError') throw new Error('CANCEL')
+    return null
+  }
+}
+export type SaveHandle = Awaited<ReturnType<typeof askSaveLocation>>
+
+export async function writeTo(h: SaveHandle, blob: Blob, name: string) {
+  if (!h) return download(blob, name)
+  const w = await h.createWritable()
+  await w.write(blob)
+  await w.close()
+}
+
 export function download(blob: Blob, name: string) {
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)

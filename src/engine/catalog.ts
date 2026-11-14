@@ -10,7 +10,8 @@ import type { Base, Pattern } from './scenes'
 import type { SpriteId } from './sprites'
 import { RECIPES } from './motion'
 import { makeLong } from './long'
-import type { CardStyle, Layout, Side } from './long'
+import type { CardStyle, Side } from './long'
+import { KINDS } from './choreo'
 
 export const LAYOUTS = [arch, album, panels, cinema, polaroid]
 export const LAYOUT_IDS = LAYOUTS.map((l) => l.id)
@@ -30,7 +31,6 @@ const THEME: Record<string, { sprites: SpriteId[]; bases: Base[] }> = {
 }
 const PATTERNS: Pattern[] = ['rain', 'rise', 'corners', 'border', 'scatter', 'orbit', 'sides', 'wave']
 const SIDES: Side[] = ['R', 'L', 'T']
-const LAYOUT3: Layout[] = ['card', 'collage', 'studio']
 const CARDS: CardStyle[] = ['plain', 'polaroid', 'gold', 'round']
 const SECS = [6, 4, 6, 5]
 
@@ -41,13 +41,13 @@ const LONG: Template[] = Object.keys(THEME).flatMap((occ, oi) => {
   return Array.from({ length: 15 }, (_, i) => {
     const s0 = (i * 2 + oi) % th.sprites.length
     const sprites = [0, 1, 2, 3].map((k) => th.sprites[(s0 + k) % th.sprites.length])
-    const layout = LAYOUT3[(i + oi) % 3]
+    const layout = KINDS[(i + oi) % KINDS.length]
     return makeLong({
       occ,
       num: i + 1,
       pal: pals[(i * 2 + oi) % pals.length],
       layout,
-      bg: layout === 'studio' || i % 4 === 1 ? 'palette' : 'blur',
+      bg: i % 4 === 1 ? 'palette' : 'blur',
       card: CARDS[(i * 3 + oi) % 4],
       side: SIDES[(i + oi * 2) % 3],
       recipe: RECIPES[(i + oi * 3) % RECIPES.length],

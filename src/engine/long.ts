@@ -5,13 +5,16 @@ import type { Scene } from './scenes'
 import { drawScene } from './scenes'
 import { drawFx, pose } from './motion'
 import type { Recipe } from './motion'
+import { beatsOf, drawChoreo, isKind, KIND_K } from './choreo'
+import type { Kind } from './choreo'
 import { cached, clamp, easeInOut, gate, hasTwo, lerp, pic, seg, slideshow, text } from './util'
 
 const W = 1920
 const H = 1080
+const ei2 = (x: number) => Math.min(1, Math.max(0, x))
 
 export type Side = 'L' | 'R' | 'T'
-export type Layout = 'card' | 'collage' | 'studio'
+export type Layout = 'card' | 'collage' | 'studio' | Kind
 export type CardStyle = 'plain' | 'polaroid' | 'gold' | 'round'
 
 export interface Design {
@@ -34,10 +37,11 @@ interface R4 {
   w: number
   h: number
 }
-const FULL: Record<Layout, R4> = {
+const FULL: Record<string, R4> = {
   card: { x: 200, y: 90, w: 1520, h: 900 },
   collage: { x: 560, y: 70, w: 800, h: 940 },
   studio: { x: 260, y: 50, w: 1400, h: 780 },
+  choreo: { x: 0, y: 0, w: 1920, h: 1080 },
 }
 const SIDE: Record<Side, R4> = {
   R: { x: 1010, y: 150, w: 810, h: 780 },
@@ -48,7 +52,7 @@ const SIDE: Record<Side, R4> = {
 export const MIN_LEN = 14
 export const DEFAULT_PHOTO_SEC = 6
 
-const total = (r: RenderCtx) => Math.max(MIN_LEN, r.durs.reduce((a, b) => a + b, 0))
+const total = (r: RenderCtx) => Math.max(MIN_LEN, r.durs.reduce((a, b) => a + b, 0) + 2)
 
 const WIN: Record<FieldKey, [number, number]> = {
   headline: [1, 11],
@@ -96,7 +100,7 @@ export function makeLong(d: Design): Template {
         f = Math.max(f, g)
       }
       const e = easeInOut(f)
-      const a = FULL[d.layout]
+      const a = FULL[isKind(d.layout) ? 'choreo' : d.layout]
       const b = SIDE[side]
       const box = { x: lerp(a.x, b.x, e), y: lerp(a.y, b.y, e), w: lerp(a.w, b.w, e), h: lerp(a.h, b.h, e) }
 
@@ -108,7 +112,7 @@ export function makeLong(d: Design): Template {
           x.drawImage(p.src, (48 - p.w * s) / 2, (27 - p.h * s) / 2, p.w * s, p.h * s)
         })
 
-      const drawCard = (idx: number, cx: number, cy: number, maxW: number, maxH: number, ps: ReturnType<typeof pose>, alpha = 1, rot = 0) => {
+      const drawCard = (idx: number, cx: number, cy: number, maxW: number, maxH: number, ps: ReturnType<typeof pose>, alpha = 1, rot = 0, sx = 1) => {
         const p = pic(r, idx)
         const k = Math.min(maxW / p.w, maxH / p.h)
         const cw = p.w * k
@@ -117,7 +121,7 @@ export function makeLong(d: Design): Template {
         c.globalAlpha *= alpha
         c.translate(cx + ps.x * cw, cy + ps.y * ch)
         c.rotate(ps.r + rot)
-        c.scale(ps.s, ps.s)
+        c.scale(ps.s * sx, ps.s)
         const x = -cw / 2
         const y = -ch / 2
         c.shadowColor = 'rgba(0,0,0,0.55)'
@@ -217,7 +221,59 @@ export function makeLong(d: Design): Template {
           c.fillRect(cx - cw, bottom, cw * 2, ch * 0.36)
         }
       }
-      slideshow(c, r.transition === 'auto' ? { ...r, transition: d.recipe.trans } : r, t, 0, 0, W, H, { durs: r.durs, fade: 1.2, paint })
+      if (isKind(d.layout)) {
+        // background follows the photo in the spotlight
+        let j = r.durs.length - 1
+        for (let i = 0; i < starts.length; i++) if (t < starts[i] + r.durs[i]) { j = i; break }
+        const lt = t - (starts[j] ?? 0)
+        const bgOf = (i: number, al: number) => {
+          c.save()
+          c.globalAlpha *= al
+          if (d.bg === 'blur') {
+            c.translate(W / 2, H / 2)
+            c.scale(1.3 + 0.01 * lt, 1.3 + 0.01 * lt)
+            c.imageSmoothingQuality = 'high'
+            c.drawImage(blur(i), -W / 2, -H / 2, W, H)
+            c.restore()
+            c.save()
+            c.globalAlpha *= al
+            c.fillStyle = rgba(bgc, 0.5)
+            c.fillRect(0, 0, W, H)
+          }
+          c.restore()
+        }
+        drawScene(c, t, r, d.scene, pal, d.bg === 'blur')
+        if (d.bg === 'blur') {
+          // (blur layers go under the motifs: redraw order = blur, tint, motifs)
+          c.save()
+          c.globalCompositeOperation = 'destination-over'
+          if (j > 0 && lt < 1) bgOf(j - 1, 1)
+          bgOf(j, ei2(lt))
+          c.restore()
+        }
+        const k = KIND_K[d.layout]
+        const SS = { R: [0.62, 1415, 540], L: [0.62, 505, 540], T: [0.55, 960, 700] }[side]
+        const sc = lerp(1, SS[0], e)
+        c.save()
+        c.translate(lerp(960, SS[1], e), lerp(540, SS[2], e))
+        c.scale(sc, sc)
+        for (const bt of beatsOf(r.durs, k)) {
+          const last = bt.e[bt.e.length - 1]
+          if (t < bt.s[0] - 1.4 || t > last + 1.6) continue
+          const ph = Math.min(2, Math.floor((3 * bt.s[0]) / T))
+          const u = clamp((t - bt.s[0]) / (last - bt.s[0]))
+          const ps = pose(d.recipe.phases[ph][0], u)
+          c.save()
+          c.rotate(ps.r * 0.4)
+          c.translate(ps.x * 260, ps.y * 200)
+          c.scale(1 + (ps.s - 1) * 0.35, 1 + (ps.s - 1) * 0.35)
+          drawChoreo(d.layout, t, bt, (idx, x, y, w, h, o = {}) => {
+            drawCard(idx, x, y, w, h, { s: o.s ?? 1, x: 0, y: 0, r: 0, soft: 0 }, o.alpha ?? 1, o.rot ?? 0, o.sx ?? 1)
+          })
+          c.restore()
+        }
+        c.restore()
+      } else slideshow(c, r.transition === 'auto' ? { ...r, transition: d.recipe.trans } : r, t, 0, 0, W, H, { durs: r.durs, fade: 1.2, paint })
 
       // ---- light & mood of the current phase (cross-faded) ----
       for (let q = 0; q < 3; q++) {

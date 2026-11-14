@@ -6,7 +6,8 @@ import { loadOverlayImage, loadPhoto } from './engine/pics'
 import { exportMp4, webCodecsAvailable } from './export/encode'
 import { DICT, LANGS, sample } from './i18n'
 import type { Lang } from './i18n'
-import { download, overlayToDataUrl, parseProject, photoToDataUrl } from './project'
+import { askSaveLocation, overlayToDataUrl, parseProject, photoToDataUrl, writeTo } from './project'
+import type { SaveHandle } from './project'
 import type { ProjectFile } from './project'
 
 interface Photo {
@@ -240,7 +241,14 @@ export default function App() {
     setMsg(null)
   }
 
-  const saveProject = () => {
+  const saveProject = async () => {
+    const fname = `${data.name1 || 'project'}-${data.name2 || ''}.nadiralbum`
+    let handle: SaveHandle = null
+    try {
+      handle = await askSaveLocation(fname, '.nadiralbum')
+    } catch {
+      return
+    }
     const file: ProjectFile = {
       app: 'nadir-photo-album',
       version: 2,
@@ -255,7 +263,7 @@ export default function App() {
       customs: customs.map((c) => overlayToDataUrl(c.pic)),
       transition,
     }
-    download(new Blob([JSON.stringify(file)], { type: 'application/json' }), `${data.name1 || 'project'}-${data.name2 || ''}.nadiralbum`)
+    await writeTo(handle, new Blob([JSON.stringify(file)], { type: 'application/json' }), fname)
     setMsg({ type: 'ok', text: t9.saved })
   }
 
@@ -311,6 +319,13 @@ export default function App() {
       setMsg({ type: 'err', text: t9.noWebcodecs })
       return
     }
+    const fname = `${data.kind}-${data.name1 || 'video'}-${data.name2 || ''}.mp4`
+    let handle: SaveHandle = null
+    try {
+      handle = await askSaveLocation(fname, '.mp4')
+    } catch {
+      return
+    }
     setPlaying(false)
     setBusy(true)
     setProgress(0)
@@ -326,7 +341,7 @@ export default function App() {
         onProgress: setProgress,
         signal: abort.current.signal,
       })
-      download(blob, `${data.kind}-${data.name1 || 'video'}-${data.name2 || ''}.mp4`)
+      await writeTo(handle, blob, fname)
       setMsg({ type: 'ok', text: t9.exportDone((blob.size / 1e6).toFixed(1), codec) })
     } catch (e) {
       const m = String((e as Error)?.message ?? e)
@@ -792,7 +807,7 @@ function OverlayPicker(props: { t9: (typeof DICT)['ar']; active?: string; onPick
       x.setTransform(1, 0, 0, 1, 0, 0)
       x.fillStyle = '#15191c'
       x.fillRect(0, 0, cv.width, cv.height)
-      drawPreset(x, 2.6, p, { W: cv.width, H: cv.height, opacity: 1, scale: 4.2, countMul: 0.3 })
+      drawPreset(x, 3.2, p, { W: cv.width, H: cv.height, opacity: 1, scale: 9, countMul: 0.2 })
     }
   }, [])
   return (
