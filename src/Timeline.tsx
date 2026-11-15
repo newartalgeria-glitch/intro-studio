@@ -154,8 +154,7 @@ export function Timeline(p: Props) {
     <div className="tl" dir="ltr">
       <div className="tlbar">
         <small>{t9.tlHint}</small>
-        {p.editable && (
-          <label>
+        <label>
             <span>{t9.tlLen}</span>
             <select value={p.length} onChange={(e) => p.onLength(Number(e.target.value))}>
               <option value={0}>{t9.tlLenAuto}</option>
