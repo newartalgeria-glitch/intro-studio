@@ -53,10 +53,12 @@ export const bookDuration = (r: RenderCtx) => plan(r).total
 interface Look {
   pal: Palette
   paper: string
+  /** photos placed diagonally and a little irregular instead of stacked */
+  stagger?: boolean
   scene: { base: Base; pattern: Pattern; sprites: SpriteId[]; seed: number }
 }
 
-function paperTex(r: RenderCtx, L: Look, key: string, side: number, back: boolean, pal: Palette) {
+function paperTex(r: RenderCtx, L: Look, key: string, side: number, back: boolean, pal: Palette, num: number) {
   return cached(r, `${key}:p${side}${back ? 'b' : 'f'}`, PW, PH, (c) => {
     const g = c.createLinearGradient(0, 0, PW, PH)
     g.addColorStop(0, L.paper)
@@ -74,8 +76,38 @@ function paperTex(r: RenderCtx, L: Look, key: string, side: number, back: boolea
     const gap = 34
     const top = 44
     const sh = (PH - top * 2 - gap) / 2
+    // seeded pseudo-random, so every render of the same page is identical
+    const rnd = (n: number) => {
+      const x = Math.sin((side * 7 + n * 13 + num * 3) * 12.9898) * 43758.5453
+      return x - Math.floor(x)
+    }
     have.forEach((i, j) => {
       const p = pic(r, i)
+      if (L.stagger && have.length === 2) {
+        // two photos on a diagonal: one near the top corner, the other near the opposite bottom corner
+        const bw = sw * 0.66
+        const bh = (PH - top * 2) * 0.5
+        const flip = (side + (rnd(1) > 0.6 ? 1 : 0)) % 2 === 0
+        const left = (j === 0) === flip // true = this photo hugs the left side
+        const kk = Math.min((bw - 24) / p.w, (bh - 24) / p.h) * (0.92 + rnd(2 + j) * 0.1)
+        const w = p.w * kk
+        const h = p.h * kk
+        const cx = left ? mx0 + 12 + w / 2 + rnd(4 + j) * 22 : PW - mx1 - 12 - w / 2 - rnd(4 + j) * 22
+        const cyy = j === 0 ? top + 14 + h / 2 + rnd(6) * 28 : PH - top - 14 - h / 2 - rnd(7) * 28
+        c.save()
+        c.translate(cx, cyy)
+        c.rotate((rnd(8 + j) - 0.5) * 0.05)
+        c.shadowColor = 'rgba(0,0,0,.38)'
+        c.shadowBlur = 18
+        c.shadowOffsetY = 6
+        c.fillStyle = '#fffdf8'
+        c.fillRect(-w / 2 - 12, -h / 2 - 12, w + 24, h + 24)
+        c.shadowColor = 'transparent'
+        c.imageSmoothingQuality = 'high'
+        c.drawImage(p.src, -w / 2, -h / 2, w, h)
+        c.restore()
+        return
+      }
       const slotH = have.length === 1 ? PH - top * 2 - 60 : sh
       const y0 = have.length === 1 ? top + 30 : top + j * (sh + gap)
       const k = Math.min((sw - 24) / p.w, (slotH - 24) / p.h)
@@ -384,7 +416,7 @@ export function makeBook(num: number, look: Look, sec: number): Template {
       const key2 = key
       const cf = coverFront(r, L, key2)
       const cb = coverBack(r, L, key2)
-      const side = (s: number, back: boolean) => paperTex(r, L, key2, s, back, pal)
+      const side = (s: number, back: boolean) => paperTex(r, L, key2, s, back, pal, num)
       // leaf textures: [front, back, w, h]
       const leaf = (j: number): [HTMLCanvasElement, HTMLCanvasElement, number, number] =>
         j === 0 ? [cf, cb, CW, CH] : [side(2 * j - 2, false), side(2 * j - 1, true), PW, PH]
@@ -474,6 +506,7 @@ export const BOOKS: Template[] = PALS.map((pal, i) =>
     {
       pal,
       paper: isLight(pal.paper) ? pal.paper : '#f3ead8',
+      stagger: i % 2 === 1,
       scene: { base: BASES[i], pattern: PATS[i], sprites: SPR[i].filter((s): s is SpriteId => !!s), seed: 900 + i },
     },
     5,
