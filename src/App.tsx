@@ -378,11 +378,11 @@ export default function App() {
   }
 
   /** One overlay at a time: choosing a new one replaces the previous; choosing the active one again clears it. */
-  const addOverlay = (o: Omit<OverlayItem, 'uid' | 'opacity' | 'scale'>) =>
+  const addOverlay = (o: Omit<OverlayItem, 'uid' | 'opacity' | 'scale' | 'count'>) =>
     setOverlays((l) => {
       const cur = l[0]
       if (cur && cur.preset === o.preset && cur.custom === o.custom) return []
-      return [{ uid: uidRef.current++, opacity: cur?.opacity ?? 0.9, scale: cur?.scale ?? 1, ...o }]
+      return [{ uid: uidRef.current++, opacity: cur?.opacity ?? 0.9, scale: cur?.scale ?? 1, count: cur?.count ?? 1, ...o }]
     })
   const patchOverlay = (uid: number, patch: Partial<OverlayItem>) => setOverlays((l) => l.map((o) => (o.uid === uid ? { ...o, ...patch } : o)))
   const addCustoms = async (files: FileList) => {
@@ -724,10 +724,18 @@ export default function App() {
                       <input type="range" min={0.1} max={1} step={0.05} value={o.opacity} onChange={(e) => patchOverlay(o.uid, { opacity: Number(e.target.value) })} />
                     </label>
                     {o.motion !== 'frame' && (
-                      <label className="f">
-                        <span>{t9.ovSize}</span>
-                        <input type="range" min={0.5} max={2.5} step={0.1} value={o.scale} onChange={(e) => patchOverlay(o.uid, { scale: Number(e.target.value) })} />
-                      </label>
+                      <>
+                        <label className="f">
+                          <span>{t9.ovSize}</span>
+                          <input type="range" min={0.5} max={2.5} step={0.1} value={o.scale} onChange={(e) => patchOverlay(o.uid, { scale: Number(e.target.value) })} />
+                        </label>
+                        <label className="f">
+                          <span>
+                            {t9.ovCount} ({Math.round((o.count ?? 1) * 100)}%)
+                          </span>
+                          <input type="range" min={0.1} max={3} step={0.1} value={o.count ?? 1} onChange={(e) => patchOverlay(o.uid, { count: Number(e.target.value) })} />
+                        </label>
+                      </>
                     )}
                   </div>
                 )

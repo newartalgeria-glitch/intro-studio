@@ -240,7 +240,7 @@ export function drawOverlays(c: C2, t: number, rc: RenderCtx) {
 }
 
 function drawItem(c: C2, t: number, it: OverlayItem, o: { W: number; H: number }, customs: Record<number, Pic>) {
-  const opts = { ...o, opacity: it.opacity, scale: it.scale }
+  const opts = { ...o, opacity: it.opacity, scale: it.scale, countMul: it.count ?? 1 }
   if (it.custom !== undefined) {
     const im = customs[it.custom]
     if (!im) return

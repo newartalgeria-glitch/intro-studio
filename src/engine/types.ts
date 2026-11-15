@@ -41,6 +41,8 @@ export interface OverlayItem {
   motion?: Motion | 'frame'
   opacity: number
   scale: number
+  /** how many items: 1 = the preset's normal amount */
+  count?: number
 }
 
 export type Wins = Record<FieldKey, [number, number]>
