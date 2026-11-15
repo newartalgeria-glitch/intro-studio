@@ -75,7 +75,7 @@ export default function App() {
   const [quality, setQuality] = useState<'1080' | '720'>('1080')
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string; retry?: boolean } | null>(null)
   const [drag, setDrag] = useState(false)
   const [allSec, setAllSec] = useState(DEFAULT_PHOTO_SEC)
 
@@ -397,7 +397,7 @@ export default function App() {
     if (out.length) setCustoms((c) => [...c, ...out])
   }
 
-  const doExport = async () => {
+  const doExport = async (direct = false) => {
     setMsg(null)
     if (!webCodecsAvailable()) {
       setMsg({ type: 'err', text: t9.noWebcodecs })
@@ -405,11 +405,14 @@ export default function App() {
     }
     const fname = 'nadir-video.mp4'
     let handle: SaveHandle = null
-    try {
-      handle = await askSaveLocation(fname, '.mp4')
-    } catch {
-      setMsg({ type: 'err', text: t9.saveCancelled })
-      return
+    if (!direct) {
+      try {
+        handle = await askSaveLocation(fname, '.mp4')
+      } catch {
+        // offer a way out in case the dialog never showed up or was closed by mistake
+        setMsg({ type: 'err', text: t9.saveCancelled, retry: true })
+        return
+      }
     }
     setPlaying(false)
     setBusy(true)
@@ -900,7 +903,7 @@ export default function App() {
                 <option value="1080">1080p</option>
                 <option value="720">720p</option>
               </select>
-              <button className="go" onClick={doExport} disabled={!ready}>
+              <button className="go" onClick={() => doExport()} disabled={!ready}>
                 {t9.export}
               </button>
             </>
@@ -930,7 +933,16 @@ export default function App() {
           onRemove={(id) => setPhotos((l) => l.filter((p) => p.id !== id))}
         />
 
-        {msg && <p className={'msg ' + msg.type}>{msg.text}</p>}
+        {msg && (
+          <p className={'msg ' + msg.type}>
+            {msg.text}
+            {msg.retry && (
+              <button className="ghost" style={{ marginInlineStart: 10 }} onClick={() => doExport(true)}>
+                {t9.exportDirect}
+              </button>
+            )}
+          </p>
+        )}
       </main>
       {modal !== null && (
         <div className="modal-bg" onPointerDown={() => setModal(null)}>
