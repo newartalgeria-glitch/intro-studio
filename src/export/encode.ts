@@ -37,6 +37,17 @@ export async function pickCodec(width: number, height: number, fps: number, bitr
   return null
 }
 
+/** Yields to the event loop without timers: timers are throttled to ~1/s in background tabs, messages are not. */
+const yieldNow = () =>
+  new Promise<void>((res) => {
+    const ch = new MessageChannel()
+    ch.port1.onmessage = () => {
+      ch.port1.close()
+      res()
+    }
+    ch.port2.postMessage(0)
+  })
+
 type ACand = { codec: string; mux: 'aac' | 'opus'; label: string }
 const ACANDS: ACand[] = [
   { codec: 'mp4a.40.2', mux: 'aac', label: 'AAC' },
@@ -95,7 +106,7 @@ export async function exportMp4(o: ExportOpts): Promise<{ blob: Blob; codec: str
       const ad = new AudioData({ format: 'f32-planar', sampleRate: buf.sampleRate, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round((a * 1e6) / buf.sampleRate), data: planar })
       aenc.encode(ad)
       ad.close()
-      while (aenc.encodeQueueSize > 20) await new Promise((r) => setTimeout(r, 1))
+      while (aenc.encodeQueueSize > 20) await yieldNow()
     }
     await aenc.flush()
     aenc.close()
@@ -123,10 +134,10 @@ export async function exportMp4(o: ExportOpts): Promise<{ blob: Blob; codec: str
     const frame = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / fps), duration: Math.round(1e6 / fps) })
     encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 })
     frame.close()
-    while (encoder.encodeQueueSize > 6) await new Promise((r) => setTimeout(r, 2))
+    while (encoder.encodeQueueSize > 6) await yieldNow()
     if (i % 3 === 0) {
       o.onProgress(i / total)
-      await new Promise((r) => setTimeout(r, 0))
+      await yieldNow()
     }
   }
   await encoder.flush()

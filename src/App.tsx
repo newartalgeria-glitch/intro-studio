@@ -28,6 +28,48 @@ interface Custom {
 }
 type Theme = 'light' | 'dark'
 
+/** The classic 8 x 6 basic-colour grid. */
+const BASIC = [
+  '#FF8080', '#FFFF80', '#80FF80', '#00FF80', '#80FFFF', '#0080FF', '#FF80C0', '#FF80FF',
+  '#FF0000', '#FFFF00', '#80FF00', '#00FF40', '#00FFFF', '#0080C0', '#8080C0', '#FF00FF',
+  '#804040', '#FF8040', '#00FF00', '#008080', '#004080', '#8080FF', '#800040', '#FF0080',
+  '#800000', '#FF8000', '#008000', '#008040', '#0000FF', '#0000A0', '#800080', '#8000FF',
+  '#400000', '#804000', '#004000', '#004040', '#000080', '#000040', '#400040', '#400080',
+  '#000000', '#808000', '#808040', '#808080', '#408080', '#C0C0C0', '#E0C080', '#FFFFFF',
+]
+
+function ColorPick({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('pointerdown', close)
+    return () => window.removeEventListener('pointerdown', close)
+  }, [open])
+  return (
+    <div className="cpick" onPointerDown={(e) => e.stopPropagation()}>
+      <button type="button" className="cswatch" style={{ background: value }} onClick={() => setOpen((o) => !o)} aria-label="color" />
+      {open && (
+        <div className="cgrid">
+          {BASIC.map((c) => (
+            <button
+              type="button"
+              key={c}
+              className={c.toLowerCase() === value.toLowerCase() ? 'on' : ''}
+              style={{ background: c }}
+              onClick={() => {
+                onChange(c)
+                setOpen(false)
+              }}
+              aria-label={c}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** Templates draw only their artwork; every word on screen is a user text clip. */
 const NO_DATA: IntroData = { kind: 'intro', headline: '', name1: '', connector: '', name2: '', date: '', place: '', footer: '' }
 const NO_STYLES: FieldStyles = {}
@@ -418,6 +460,12 @@ export default function App() {
     setBusy(true)
     setProgress(0)
     abort.current = new AbortController()
+    let lock: { release: () => Promise<void> } | null = null
+    try {
+      lock = (await (navigator as unknown as { wakeLock?: { request: (t: string) => Promise<{ release: () => Promise<void> }> } }).wakeLock?.request('screen')) ?? null
+    } catch {
+      /* optional */
+    }
     const h = quality === '1080' ? 1080 : 720
     try {
       const audio = music && aclips.length ? await mixdown(music, aclips, dur) : null
@@ -441,6 +489,7 @@ export default function App() {
       else if (m === 'NO_AUDIO_ENCODER') setMsg({ type: 'err', text: t9.noAudioEnc })
       else setMsg({ type: 'err', text: t9.exportFail + m })
     } finally {
+      void lock?.release().catch(() => {})
       setBusy(false)
       draw()
     }
@@ -571,23 +620,13 @@ export default function App() {
                     <input type="range" min={20} max={400} step={2} value={selText.size} onChange={(e) => patchText(selText.id, { size: Number(e.target.value) })} />
                   </div>
                   <div className="row2">
-                    <label className="f">
+                    <div className="f">
                       <span>{t9.color}</span>
-                      <input type="color" value={selText.color} onChange={(e) => patchText(selText.id, { color: e.target.value })} />
-                    </label>
+                      <ColorPick value={selText.color} onChange={(c) => patchText(selText.id, { color: c })} />
+                    </div>
                     <label className="chk">
                       <input type="checkbox" checked={selText.bold} onChange={(e) => patchText(selText.id, { bold: e.target.checked })} />
                       {t9.bold}
-                    </label>
-                  </div>
-                  <div className="row2">
-                    <label className="f">
-                      <span>{t9.startAt}</span>
-                      <input type="number" min={0} max={Math.max(0, dur - 0.5)} step={0.5} value={+selText.start.toFixed(1)} onChange={(e) => patchText(selText.id, { start: Math.min(Math.max(0, Number(e.target.value) || 0), Math.max(0, dur - 0.5)) })} onBlur={() => settle(selText.id)} />
-                    </label>
-                    <label className="f">
-                      <span>{t9.textLen}</span>
-                      <input type="number" min={0.5} max={dur} step={0.5} value={+selText.dur.toFixed(1)} onChange={(e) => patchText(selText.id, { dur: Math.min(Math.max(0.5, Number(e.target.value) || 0.5), dur - selText.start) })} onBlur={() => settle(selText.id)} />
                     </label>
                   </div>
                   <button className="ghost" onClick={() => patchText(selText.id, { x: 960, y: 540 })}>
