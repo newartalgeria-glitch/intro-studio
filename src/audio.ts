@@ -4,6 +4,10 @@ export interface AudioClip {
   start: number
   inPt: number
   outPt: number
+  /** level of this clip: 1 = normal, up to 2 (the line in the middle of the clip) */
+  vol?: number
+  /** seconds of gradual fade at the end of the clip */
+  fade?: number
 }
 
 export interface Music {
@@ -56,6 +60,8 @@ export function peaks(buf: AudioBuffer, n: number): Float32Array {
     for (let j = 0; j < step; j += Math.max(1, Math.floor(step / 40))) m = Math.max(m, Math.abs(d[a + j] ?? 0))
     out[i] = m
   }
+  const top = Math.max(0.01, ...out)
+  for (let i = 0; i < n; i++) out[i] /= top
   return out
 }
 
@@ -73,17 +79,28 @@ function schedule(ctx: BaseAudioContext, dest: AudioNode, m: Music, clips: Audio
   }
   gain.connect(dest)
   const srcs: AudioBufferSourceNode[] = []
+  const tl = (x: number) => at + (x - from)
   for (const c of clips) {
     const end = c.start + clipLen(c)
     if (end <= from || c.start >= dur) continue
-    const s = ctx.createBufferSource()
-    s.buffer = m.buffer
-    s.connect(gain)
     const skip = Math.max(0, from - c.start)
-    const when = at + Math.max(0, c.start - from)
     const len = Math.min(clipLen(c) - skip, dur - Math.max(c.start, from))
     if (len <= 0) continue
-    s.start(when, c.inPt + skip, len)
+    const vol = c.vol ?? 1
+    const fade = Math.min(c.fade ?? 0, clipLen(c))
+    const t0 = Math.max(from, c.start)
+    const fs = end - fade
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(fade > 0 && t0 > fs ? (vol * (end - t0)) / fade : vol, tl(t0))
+    if (fade > 0) {
+      if (fs > t0) g.gain.setValueAtTime(vol, tl(fs))
+      g.gain.linearRampToValueAtTime(0, tl(end))
+    }
+    g.connect(gain)
+    const s = ctx.createBufferSource()
+    s.buffer = m.buffer
+    s.connect(g)
+    s.start(tl(t0), c.inPt + skip, len)
     srcs.push(s)
   }
   return srcs

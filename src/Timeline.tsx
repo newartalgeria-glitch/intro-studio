@@ -6,6 +6,7 @@ import type { DICT } from './i18n'
 
 const LAB = 74
 const ROW = 30
+const AROW = 45
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
 export interface TlPhoto {
@@ -47,6 +48,8 @@ interface Props {
   onAudioClip: (id: number, patch: Partial<AudioClip>) => void
 }
 
+const VMAX = 2
+
 function Wave({ peaks, duration, inPt, outPt, w }: { peaks: Float32Array; duration: number; inPt: number; outPt: number; w: number }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
@@ -54,7 +57,7 @@ function Wave({ peaks, duration, inPt, outPt, w }: { peaks: Float32Array; durati
     if (!cv) return
     const cw = Math.max(1, Math.min(3000, Math.round(w)))
     cv.width = cw
-    cv.height = ROW - 6
+    cv.height = AROW - 6
     const c = cv.getContext('2d')!
     c.clearRect(0, 0, cw, cv.height)
     c.fillStyle = 'rgba(255,255,255,.85)'
@@ -81,6 +84,7 @@ export function Timeline(p: Props) {
   }, [menu])
   const menuPhoto = menu ? p.photos.find((x) => x.id === menu.id) : undefined
   const box = useRef<HTMLDivElement>(null)
+  const inner = useRef<HTMLDivElement>(null)
   const [vw, setVw] = useState(520)
 
   useEffect(() => {
@@ -169,7 +173,7 @@ export function Timeline(p: Props) {
         </label>
       </div>
       <div className="tlscroll" ref={box}>
-        <div className="tlin" style={{ width: LAB + width + 8 }}>
+        <div className="tlin" ref={inner} style={{ width: LAB + width + 8 }}>
           <div className="tlrow ruler">
             <div className="tllab" />
             <div className="tllane" style={{ width }} onPointerDown={seekAt}>
@@ -265,8 +269,8 @@ export function Timeline(p: Props) {
             </div>
           ))}
 
-          <div className="tlrow aud">
-            <div className="tllab">♪ {t9.tlTrack} {nTracks + 2}</div>
+          <div className="tlrow aud" style={{ height: AROW }}>
+            <div className="tllab note" title={t9.tlAudio}>♪</div>
             <div className="tllane" style={{ width }} onPointerDown={(e) => { p.onSel(null); seekAt(e) }}>
               {!p.audio && <div className="clip ghost" style={{ left: 0, width: Math.min(width, 340) }}>{t9.tlAudio}: {t9.musicNone}</div>}
               {p.audio?.clips.map((c) => {
@@ -286,6 +290,39 @@ export function Timeline(p: Props) {
                     }}
                   >
                     <Wave peaks={a.peaks} duration={a.duration} inPt={c.inPt} outPt={c.outPt} w={w} />
+                    {(() => {
+                      const vol = c.vol ?? 1
+                      const fade = Math.min(c.fade ?? 0, clipLen(c))
+                      const ly = (1 - vol / VMAX) * (AROW - 6)
+                      const fx = Math.max(0, w - 16 - fade * px)
+                      return (
+                        <>
+                          <svg className="vline" width={Math.max(10, w)} height={AROW - 6} style={{ pointerEvents: 'none' }}>
+                            <polyline points={`0,${ly} ${fx},${ly} ${Math.max(10, w)},${AROW - 6}`} fill="none" stroke="#fff" strokeWidth="2" />
+                          </svg>
+                          <i
+                            className="vhit"
+                            title={t9.musicVolume}
+                            style={{ top: ly - 6, width: Math.max(0, fx) }}
+                            onPointerDown={(ev) => {
+                              p.onSel({ kind: 'audio', id: c.id })
+                              const v0 = vol
+                              drag(ev, (_dt, dy) => p.onAudioClip(c.id, { vol: Math.round(clamp(v0 - (dy / (AROW - 6)) * VMAX, 0, VMAX) * 20) / 20 }))
+                            }}
+                          />
+                          <i
+                            className="fpt"
+                            title={t9.musicFade}
+                            style={{ left: fx - 6, top: ly - 6 }}
+                            onPointerDown={(ev) => {
+                              p.onSel({ kind: 'audio', id: c.id })
+                              const f0 = fade
+                              drag(ev, (dt) => p.onAudioClip(c.id, { fade: Math.round(clamp(f0 - dt, 0, Math.max(0, clipLen(c) - 16 / px)) * 10) / 10 }))
+                            }}
+                          />
+                        </>
+                      )
+                    })()}
                     <i
                       className="grip l"
                       onPointerDown={(ev) => {
@@ -310,7 +347,24 @@ export function Timeline(p: Props) {
               })}
             </div>
           </div>
-          <div className="playhead" style={{ left: LAB + t * px }} />
+          <div className="playhead" style={{ left: LAB + t * px }}>
+            <i
+              className="knob"
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                const el = inner.current!
+                const go = (cx: number) => p.onSeek(clamp((cx - el.getBoundingClientRect().left - LAB) / px, 0, total))
+                const mv = (ev: PointerEvent) => go(ev.clientX)
+                const up = () => {
+                  window.removeEventListener('pointermove', mv)
+                  window.removeEventListener('pointerup', up)
+                }
+                window.addEventListener('pointermove', mv)
+                window.addEventListener('pointerup', up)
+              }}
+            />
+          </div>
         </div>
       </div>
       {menu && menuPhoto && (

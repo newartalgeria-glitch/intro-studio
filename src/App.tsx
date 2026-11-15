@@ -242,7 +242,7 @@ export default function App() {
     const base = aclips[0] ?? { inPt: 0, outPt: music.buffer.duration }
     const seg = Math.max(0.5, base.outPt - base.inPt)
     const out: AudioClip[] = []
-    for (let at = 0; at < dur - 0.05 && out.length < 60; at += seg) out.push({ id: uidRef.current++, start: at, inPt: base.inPt, outPt: base.inPt + Math.min(seg, dur - at) })
+    for (let at = 0; at < dur - 0.05 && out.length < 60; at += seg) out.push({ id: uidRef.current++, start: at, inPt: base.inPt, outPt: base.inPt + Math.min(seg, dur - at), vol: base.vol })
     setAclips(out)
     setSel(null)
   }
@@ -251,8 +251,8 @@ export default function App() {
     const c = aclips.find((x) => at > x.start + 0.3 && at < x.start + clipLen(x) - 0.3)
     if (!c) return
     const cut = c.inPt + (at - c.start)
-    const b: AudioClip = { id: uidRef.current++, start: at, inPt: cut, outPt: c.outPt }
-    setAclips((l) => l.flatMap((x) => (x.id === c.id ? [{ ...x, outPt: cut }, b] : [x])))
+    const b: AudioClip = { id: uidRef.current++, start: at, inPt: cut, outPt: c.outPt, vol: c.vol, fade: c.fade }
+    setAclips((l) => l.flatMap((x) => (x.id === c.id ? [{ ...x, outPt: cut, fade: 0 }, b] : [x])))
     setSel({ kind: 'audio', id: b.id })
   }
 
@@ -866,9 +866,15 @@ export default function App() {
             </>
           ) : (
             <>
+              <button className="ico" onClick={splitAudio} disabled={!music} title={t9.musicSplit} aria-label={t9.musicSplit}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12" /></svg>
+              </button>
+              <button className="ico" onClick={removeSel} disabled={!sel} title={t9.delClip} aria-label={t9.delClip}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6" /></svg>
+              </button>
               <select value={quality} onChange={(e) => setQuality(e.target.value as '1080' | '720')} aria-label={t9.quality} title={t9.quality}>
-                <option value="1080">{t9.q1080}</option>
-                <option value="720">{t9.q720}</option>
+                <option value="1080">1080p</option>
+                <option value="720">720p</option>
               </select>
               <button className="go" onClick={doExport} disabled={!ready}>
                 {t9.export}
