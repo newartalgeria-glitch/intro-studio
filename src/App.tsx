@@ -983,6 +983,13 @@ export default function App() {
           </p>
         )}
       </main>
+      <footer className="legal">
+        <a href="guides/">{t9.navGuides}</a>
+        <a href="about.html">{t9.navAbout}</a>
+        <a href="privacy.html">{t9.navPrivacy}</a>
+        <a href="terms.html">{t9.navTerms}</a>
+        <a href="contact.html">{t9.navContact}</a>
+      </footer>
       {modal !== null && (
         <div className="modal-bg" onPointerDown={() => setModal(null)}>
           <div className="modal" role="dialog" aria-label={t9.textModalTitle} onPointerDown={(e) => e.stopPropagation()}>

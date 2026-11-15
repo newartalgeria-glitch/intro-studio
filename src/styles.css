@@ -400,3 +400,7 @@ body {
 .cgrid { position: absolute; z-index: 50; top: 38px; inset-inline-start: 0; display: grid; grid-template-columns: repeat(8, 24px); gap: 2px; padding: 6px; background: #f0f0f0; border: 1px solid #888; box-shadow: 0 8px 20px rgba(0,0,0,.4); direction: ltr; }
 .cgrid button { width: 24px; height: 22px; padding: 0; border: 1px solid #777; border-radius: 0; cursor: pointer; }
 .cgrid button.on { outline: 2px solid #000; outline-offset: 1px; }
+
+footer.legal{display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:center;padding:14px 16px 22px;font-size:.85rem}
+footer.legal a{color:var(--muted);text-decoration:none}
+footer.legal a:hover{text-decoration:underline}

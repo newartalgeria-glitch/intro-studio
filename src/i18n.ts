@@ -8,6 +8,11 @@ export const LANGS: { id: Lang; label: string }[] = [
 ]
 
 const ar = {
+  navGuides: 'الأدلة',
+  navAbout: 'من نحن',
+  navPrivacy: 'الخصوصية',
+  navTerms: 'الشروط',
+  navContact: 'اتصل بنا',
   tagline: 'جينيريك البداية والنهاية لفيديوهات المناسبات',
   intro: 'بداية الفيديو',
   outro: 'نهاية الفيديو',
@@ -139,6 +144,11 @@ const ar = {
 type Dict = typeof ar
 
 const fr: Dict = {
+  navGuides: 'Guides',
+  navAbout: 'À propos',
+  navPrivacy: 'Confidentialité',
+  navTerms: 'Conditions',
+  navContact: 'Contact',
   tagline: "Génériques de début et de fin pour vos vidéos d'événements",
   intro: 'Début de vidéo',
   outro: 'Fin de vidéo',
@@ -269,6 +279,11 @@ const fr: Dict = {
 }
 
 const en: Dict = {
+  navGuides: 'Guides',
+  navAbout: 'About',
+  navPrivacy: 'Privacy',
+  navTerms: 'Terms',
+  navContact: 'Contact',
   tagline: 'Opening and closing titles for event videos',
   intro: 'Video intro',
   outro: 'Video outro',

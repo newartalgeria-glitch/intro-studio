@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://newartalgeria-glitch.github.io/intro-studio/sitemap.xml
