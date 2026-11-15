@@ -182,6 +182,22 @@ export function Timeline(p: Props) {
                   {fmt(s)}
                 </span>
               ))}
+              <i
+              className="knob" style={{ left: t * px }}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                const el = inner.current!
+                const go = (cx: number) => p.onSeek(clamp((cx - el.getBoundingClientRect().left - LAB) / px, 0, total))
+                const mv = (ev: PointerEvent) => go(ev.clientX)
+                const up = () => {
+                  window.removeEventListener('pointermove', mv)
+                  window.removeEventListener('pointerup', up)
+                }
+                window.addEventListener('pointermove', mv)
+                window.addEventListener('pointerup', up)
+              }}
+            />
             </div>
           </div>
 
@@ -347,24 +363,7 @@ export function Timeline(p: Props) {
               })}
             </div>
           </div>
-          <div className="playhead" style={{ left: LAB + t * px }}>
-            <i
-              className="knob"
-              onPointerDown={(e) => {
-                e.stopPropagation()
-                e.preventDefault()
-                const el = inner.current!
-                const go = (cx: number) => p.onSeek(clamp((cx - el.getBoundingClientRect().left - LAB) / px, 0, total))
-                const mv = (ev: PointerEvent) => go(ev.clientX)
-                const up = () => {
-                  window.removeEventListener('pointermove', mv)
-                  window.removeEventListener('pointerup', up)
-                }
-                window.addEventListener('pointermove', mv)
-                window.addEventListener('pointerup', up)
-              }}
-            />
-          </div>
+          <div className="playhead" style={{ left: LAB + t * px }} />
         </div>
       </div>
       {menu && menuPhoto && (
