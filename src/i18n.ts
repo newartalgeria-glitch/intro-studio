@@ -125,7 +125,7 @@ const ar = {
   motions: { fall: 'تتساقط', rise: 'تصعد', twinkle: 'تتلألأ', drift: 'تطفو', burst: 'تنفجر', frame: 'إطار كامل' } as Record<string, string>,
   transitions: { auto: 'تلقائي (حسب القالب)', fade: 'تلاشي', slideX: 'انزلاق أفقي', slideY: 'انزلاق عمودي', zoom: 'تكبير', wipe: 'مسح', blinds: 'شرائح', flash: 'وميض', spin: 'دوران' } as Record<string, string>,
   occasions: 'المناسبة',
-  occ: { wedding: 'زواج', engagement: 'خطوبة', babyBoy: 'مولود ذكر', babyGirl: 'مولودة أنثى', graduation: 'تخرج', family: 'ذكريات عائلية', formal: 'مناسبات رسمية', artistic: 'مناسبات فنية', birthday: 'عيد ميلاد', love: 'قصة حب', general: 'عامة' } as Record<string, string>,
+  occ: { wedding: 'زواج', engagement: 'خطوبة', babyBoy: 'مولود ذكر', babyGirl: 'مولودة أنثى', graduation: 'تخرج', family: 'ذكريات عائلية', formal: 'مناسبات رسمية', artistic: 'مناسبات فنية', birthday: 'عيد ميلاد', love: 'قصة حب', general: 'عامة', book: 'ألبوم كتاب 3D' } as Record<string, string>,
   layouts: { arch: 'قوس مضيء', album: 'ألبوم ثلاثي الأبعاد', panels: 'لوحات صور', cinema: 'سينمائي', polaroid: 'صور معلّقة' } as Record<string, string>,
   tpl: {
     gold: ['فخم وذهبي', 'خلفية عنابية وإطار ذهبي يُرسم ببطء'],
@@ -254,7 +254,7 @@ const fr: Dict = {
   motions: { fall: 'tombent', rise: 'montent', twinkle: 'scintillent', drift: 'flottent', burst: 'jaillissent', frame: 'plein cadre' },
   transitions: { auto: 'Auto (selon le modèle)', fade: 'Fondu', slideX: 'Glissement horizontal', slideY: 'Glissement vertical', zoom: 'Zoom', wipe: 'Balayage', blinds: 'Stores', flash: 'Flash', spin: 'Rotation' },
   occasions: 'Occasion',
-  occ: { wedding: 'Mariage', engagement: 'Fiançailles', babyBoy: 'Naissance garçon', babyGirl: 'Naissance fille', graduation: 'Remise de diplôme', family: 'Souvenirs de famille', formal: 'Cérémonies officielles', artistic: 'Événements artistiques', birthday: 'Anniversaire', love: "Histoire d'amour", general: 'Général' },
+  occ: { wedding: 'Mariage', engagement: 'Fiançailles', babyBoy: 'Naissance garçon', babyGirl: 'Naissance fille', graduation: 'Remise de diplôme', family: 'Souvenirs de famille', formal: 'Cérémonies officielles', artistic: 'Événements artistiques', birthday: 'Anniversaire', love: "Histoire d'amour", general: 'Général', book: 'Album livre 3D' },
   layouts: { arch: 'Arche lumineuse', album: 'Album 3D', panels: 'Panneaux photo', cinema: 'Cinéma', polaroid: 'Polaroïds' },
   tpl: {
     gold: ['Luxe et or', 'Fond bordeaux et cadre doré tracé lentement'],
@@ -382,7 +382,7 @@ const en: Dict = {
   motions: { fall: 'falling', rise: 'rising', twinkle: 'twinkling', drift: 'drifting', burst: 'bursting', frame: 'full frame' },
   transitions: { auto: 'Auto (per template)', fade: 'Fade', slideX: 'Slide sideways', slideY: 'Slide vertically', zoom: 'Zoom', wipe: 'Wipe', blinds: 'Blinds', flash: 'Flash', spin: 'Spin' },
   occasions: 'Occasion',
-  occ: { wedding: 'Wedding', engagement: 'Engagement', babyBoy: 'Baby boy', babyGirl: 'Baby girl', graduation: 'Graduation', family: 'Family memories', formal: 'Formal events', artistic: 'Artistic events', birthday: 'Birthday', love: 'Love story', general: 'General' },
+  occ: { wedding: 'Wedding', engagement: 'Engagement', babyBoy: 'Baby boy', babyGirl: 'Baby girl', graduation: 'Graduation', family: 'Family memories', formal: 'Formal events', artistic: 'Artistic events', birthday: 'Birthday', love: 'Love story', general: 'General', book: '3D book album' },
   layouts: { arch: 'Glowing arch', album: '3D album', panels: 'Photo panels', cinema: 'Cinema', polaroid: 'Polaroids' },
   tpl: {
     gold: ['Luxury gold', 'Burgundy backdrop with a slowly drawn gold frame'],

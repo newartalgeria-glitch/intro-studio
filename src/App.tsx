@@ -988,7 +988,7 @@ function TemplateStrip(props: {
   return (
     <div className="tpls">
       <div className="occs" role="tablist" aria-label={t9.occasions}>
-        {OCCASIONS.map((o) => (
+        {[...OCCASIONS, 'book'].map((o) => (
           <button key={o} role="tab" aria-selected={occ === o} onClick={() => props.onOcc(o)}>
             {t9.occ[o]}
           </button>

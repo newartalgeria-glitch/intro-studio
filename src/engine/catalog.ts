@@ -1,4 +1,5 @@
 import type { Template } from './types'
+import { BOOKS } from './book'
 import { EXTRA, OCCASIONS, PALETTES } from './palettes'
 import type { Occasion } from './palettes'
 import { arch } from './layouts/arch'
@@ -84,7 +85,7 @@ const LEGACY: Template[] = OCCASIONS.flatMap((occ, k) =>
   }),
 )
 
-export const CATALOG: Template[] = [...LONG, ...LEGACY]
+export const CATALOG: Template[] = [...LONG, ...LEGACY, ...BOOKS]
 
 /** Ids from older versions of the tool map to the closest template that still exists. */
 export function resolveId(id: string): string {
