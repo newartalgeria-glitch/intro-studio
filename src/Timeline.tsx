@@ -155,18 +155,6 @@ export function Timeline(p: Props) {
       <div className="tlbar">
         <small>{t9.tlHint}</small>
         <label>
-            <span>{t9.tlLen}</span>
-            <select value={p.length} onChange={(e) => p.onLength(Number(e.target.value))}>
-              <option value={0}>{t9.tlLenAuto}</option>
-              {[1, 2, 3, 4, 5, 8].map((m) => (
-                <option key={m} value={m * 60}>
-                  {m} {t9.tlMin}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label>
           <span>{t9.tlZoom}</span>
           <input type="range" min={1} max={10} step={0.5} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />
         </label>
