@@ -86,7 +86,9 @@ function schedule(ctx: BaseAudioContext, dest: AudioNode, m: Music, clips: Audio
     const skip = Math.max(0, from - c.start)
     const len = Math.min(clipLen(c) - skip, dur - Math.max(c.start, from))
     if (len <= 0) continue
-    const vol = c.vol ?? 1
+    const v = c.vol ?? 1
+    // perceptual curve: halfway down the line is clearly quieter, not just -6 dB
+    const vol = v <= 1 ? v * v : v
     const fade = Math.min(c.fade ?? 0, clipLen(c))
     const t0 = Math.max(from, c.start)
     const fs = end - fade

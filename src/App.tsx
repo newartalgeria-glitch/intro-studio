@@ -171,6 +171,13 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing])
   useEffect(() => () => player.current.stop(), [])
+  // volume / trim edits while playing are heard at once
+  useEffect(() => {
+    if (!playing) return
+    const h = setTimeout(() => startAudio(tRef.current), 120)
+    return () => clearTimeout(h)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aclips, music?.volume])
 
   const changeLang = (next: Lang) => setLang(next)
 

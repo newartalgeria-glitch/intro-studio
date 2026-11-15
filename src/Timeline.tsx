@@ -298,7 +298,7 @@ export function Timeline(p: Props) {
                       return (
                         <>
                           <svg className="vline" width={Math.max(10, w)} height={AROW - 6} style={{ pointerEvents: 'none' }}>
-                            <polyline points={`0,${ly} ${fx},${ly} ${Math.max(10, w)},${AROW - 6}`} fill="none" stroke="#fff" strokeWidth="2" />
+                            <polyline points={`0,${ly} ${fx},${ly} ${Math.max(10, w)},${AROW - 6}`} fill="none" stroke="#ff2d2d" strokeWidth="3" strokeLinejoin="round" />
                           </svg>
                           <i
                             className="vhit"
