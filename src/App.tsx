@@ -635,11 +635,20 @@ export default function App() {
                 <div className="row2">
                   <label className="f">
                     <span>{t9.photoSec}</span>
-                    <input type="number" min={2} max={40} step={0.5} value={allSec} onChange={(e) => setAllSec(Number(e.target.value))} />
+                    <input
+                      type="number"
+                      min={2}
+                      max={40}
+                      step={0.5}
+                      value={allSec}
+                      onChange={(e) => {
+                        const v = Number(e.target.value)
+                        setAllSec(v)
+                        // applies to every photo at once, as soon as the value is valid
+                        if (v >= 2 && v <= 40) setPhotos((l) => l.map((p) => ({ ...p, dur: v })))
+                      }}
+                    />
                   </label>
-                  <button className="ghost" onClick={() => setPhotos((l) => l.map((p) => ({ ...p, dur: Math.min(40, Math.max(2, allSec || 2)) })))}>
-                    {t9.applyAll}
-                  </button>
                 </div>
               )}
               <ul className="thumbs">
