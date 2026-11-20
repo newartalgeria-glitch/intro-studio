@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_PHOTO_SEC, FONTS, activeMedia, clearMediaSrc, dropMediaSrc, loadMedia, mediaSrc, sampleColor, setMediaRedraw, setMediaSrc, syncVideos, OCCASIONS, PRESETS, TEMPLATES, TRANSITIONS, activeAt, boxOf, defaultFont, drawPreset, loadFonts, makeRenderCtx, renderFrame, resolveId } from './engine'
+import { DEFAULT_PHOTO_SEC, FONTS, activeMedia, clearMediaSrc, loadMedia, mediaSrc, sampleColor, setMediaRedraw, setMediaSrc, syncVideos, OCCASIONS, PRESETS, TEMPLATES, TRANSITIONS, activeAt, boxOf, defaultFont, drawPreset, loadFonts, makeRenderCtx, renderFrame, resolveId } from './engine'
 import type { FieldStyles, IntroData, MediaClip, Motion, OverlayItem, Pic, TextClip, Transition } from './engine'
 import { Timeline } from './Timeline'
 import type { Sel } from './Timeline'
@@ -115,6 +115,7 @@ export default function App() {
   const [occTab, setOccTab] = useState('wedding')
   const [ready, setReady] = useState(false)
   const [t, setT] = useState(0)
+  const [undoN, setUndoN] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [quality, setQuality] = useState<'1080' | '720'>('1080')
   const [busy, setBusy] = useState(false)
@@ -235,6 +236,62 @@ export default function App() {
 
   const changeLang = (next: Lang) => setLang(next)
 
+
+  // ---- undo: remembers the project state before each burst of edits ----
+  interface Snap {
+    photos: Photo[]
+    texts: TextClip[]
+    mclips: MediaClip[]
+    aclips: AudioClip[]
+    music: Music | null
+    overlays: OverlayItem[]
+    transition: Transition
+    tplId: string
+    length: number
+  }
+  const snapNow: Snap = { photos, texts, mclips, aclips, music, overlays, transition, tplId, length }
+  const settled = useRef<Snap>(snapNow)
+  const stack = useRef<Snap[]>([])
+  const skipHist = useRef(false)
+  const resetUntil = useRef(0)
+  useEffect(() => {
+    const s: Snap = { photos, texts, mclips, aclips, music, overlays, transition, tplId, length }
+    if (skipHist.current) {
+      skipHist.current = false
+      settled.current = s
+      return
+    }
+    if (Date.now() < resetUntil.current) {
+      stack.current = []
+      settled.current = s
+      setUndoN(0)
+      return
+    }
+    const h = setTimeout(() => {
+      stack.current.push(settled.current)
+      if (stack.current.length > 50) stack.current.shift()
+      settled.current = s
+      setUndoN(stack.current.length)
+    }, 350)
+    return () => clearTimeout(h)
+  }, [photos, texts, mclips, aclips, music, overlays, transition, tplId, length])
+  const undo = () => {
+    const p = stack.current.pop()
+    if (!p) return
+    skipHist.current = true
+    setPhotos(p.photos)
+    setTexts(p.texts)
+    setMclips(p.mclips)
+    setAclips(p.aclips)
+    setMusic(p.music)
+    setOverlays(p.overlays)
+    setTransition(p.transition)
+    setTplId(p.tplId)
+    setLength(p.length)
+    setSel(null)
+    setUndoN(stack.current.length)
+  }
+
   // ---- text clips ----
   const selText = sel?.kind === 'text' ? texts.find((k) => k.id === sel.id) : undefined
   const patchText = (id: number, patch: Partial<TextClip>) => setTexts((l) => l.map((k) => (k.id === id ? { ...k, ...patch } : k)))
@@ -304,7 +361,6 @@ export default function App() {
   const removeSel = () => {
     if (!sel) return
     if (sel.kind === 'media') {
-      dropMediaSrc(sel.id)
       setMclips((l) => l.filter((k) => k.id !== sel.id))
     } else if (sel.kind === 'text') setTexts((l) => l.filter((k) => k.id !== sel.id))
     else setAclips((l) => l.filter((c) => c.id !== sel.id))
@@ -314,6 +370,11 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       const tg = e.target as HTMLElement
       if (tg && /^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName)) return
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+        return
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
         e.preventDefault()
         removeSel()
@@ -394,6 +455,7 @@ export default function App() {
 
   const newProject = () => {
     if (!window.confirm(t9.confirmNew)) return
+    resetUntil.current = Date.now() + 1500
     setTexts([])
     clearMediaSrc()
     setMclips([])
@@ -442,6 +504,7 @@ export default function App() {
   const openProject = async (f: File) => {
     try {
       const p = await parseProject(f)
+      resetUntil.current = Date.now() + 2500
       setTexts(p.texts)
       clearMediaSrc()
       const mc: MediaClip[] = []
@@ -735,6 +798,17 @@ export default function App() {
                 {photos.map((p, i) => (
                   <li key={p.id}>
                     <img src={p.thumb} alt={`${i + 1}`} />
+                    {long && (
+                      <div className="dsec">
+                        <button aria-label="-" onClick={() => setDur(p.id, Math.max(2, Math.round((p.dur - 0.5) * 2) / 2))} disabled={p.dur <= 2}>
+                          −
+                        </button>
+                        <span>{p.dur}{t9.tlSeconds}</span>
+                        <button aria-label="+" onClick={() => setDur(p.id, Math.min(40, Math.round((p.dur + 0.5) * 2) / 2))} disabled={p.dur >= 40}>
+                          +
+                        </button>
+                      </div>
+                    )}
                     <div>
                       <button aria-label={t9.up} onClick={() => move(i, -1)} disabled={i === 0}>
                         ‹
@@ -1151,6 +1225,9 @@ export default function App() {
             </>
           ) : (
             <>
+              <button className="ico" onClick={undo} disabled={undoN === 0} title={`${t9.undo} (Ctrl+Z)`} aria-label={t9.undo}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></svg>
+              </button>
               <button className="ico" onClick={splitAudio} disabled={!music} title={t9.musicSplit} aria-label={t9.musicSplit}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12" /></svg>
               </button>

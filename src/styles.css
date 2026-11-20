@@ -435,3 +435,6 @@ footer.legal a:hover{text-decoration:underline}
 .tl .tllab.note{line-height:24px}
 .stagerow .stage{flex:none;width:min(calc(100% - 244px), calc((100vh - var(--below, 312px)) * 16 / 9), 1500px);max-width:none}
 @media (max-width:900px){.main{grid-row:auto;overflow:visible}.stagerow .stage{width:100%}}
+
+.thumbs li .dsec{display:flex;justify-content:center;align-items:center;gap:4px;margin-top:4px;font-size:11px}
+.thumbs li .dsec span{min-width:34px;text-align:center}
