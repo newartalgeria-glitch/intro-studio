@@ -5,8 +5,8 @@ import { clipLen } from './audio'
 import type { DICT } from './i18n'
 
 const LAB = 74
-const ROW = 30
-const AROW = 45
+const ROW = 26
+const AROW = 38
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
 export interface TlPhoto {
