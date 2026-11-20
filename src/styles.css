@@ -420,6 +420,8 @@ footer.legal a:hover{text-decoration:underline}
 .mrow .tllab.note { font-size: 20px; line-height: 28px; color: #e0762b; }
 .stagerow{display:flex;gap:12px;align-items:flex-start;flex:none}
 .stagerow .stage{flex:1 1 0;min-width:0;width:auto;max-width:150vh;align-self:flex-start}
-.tools.dock{flex:0 0 138px;flex-direction:column;align-items:stretch;gap:6px}
-.tools.dock button,.tools.dock .btn,.tools.dock select{padding:7px 8px;font-size:13px;white-space:nowrap;text-align:center;width:100%}
+.tools.dock{flex:0 0 232px;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px;justify-content:flex-start}
+.tools.dock .br{flex-basis:100%;height:0}
+.tools.dock button,.tools.dock .btn,.tools.dock select{padding:6px 8px;font-size:12.5px;white-space:nowrap;text-align:center;width:auto}
+.tools .pri{background:var(--pri-bg)!important;border-color:var(--pri-bd)!important;color:var(--pri-ink)!important}
 @media (max-width:900px){.stagerow{flex-direction:column}.tools.dock{flex:none;flex-direction:row;flex-wrap:wrap}.tools.dock button,.tools.dock .btn,.tools.dock select{width:auto}}

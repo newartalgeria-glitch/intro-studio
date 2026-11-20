@@ -1104,8 +1104,6 @@ export default function App() {
             {!ready && <div className="loading">{t9.loadingFonts}</div>}
           </div>
           <div className="tools dock">
-            <button onClick={newProject}>{t9.newProject}</button>
-            <button onClick={saveProject}>{t9.saveProject}</button>
             <label className="btn">
               {t9.openProject}
               <input
@@ -1129,6 +1127,9 @@ export default function App() {
             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-pressed={theme === 'dark'}>
               {theme === 'light' ? t9.themeDark : t9.themeLight}
             </button>
+            <i className="br" />
+            <button className="pri" onClick={newProject}>{t9.newProject}</button>
+            <button onClick={saveProject}>{t9.saveProject}</button>
           </div>
         </div>
         <div className="bar">
