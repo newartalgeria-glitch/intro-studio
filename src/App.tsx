@@ -971,33 +971,6 @@ export default function App() {
           )}
         </div>
       </aside>
-      <div className="tools dock">
-        <button onClick={newProject}>{t9.newProject}</button>
-        <button onClick={saveProject}>{t9.saveProject}</button>
-        <label className="btn">
-          {t9.openProject}
-          <input
-            type="file"
-            accept=".nadiralbum,application/json"
-            hidden
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) openProject(f)
-              e.target.value = ''
-            }}
-          />
-        </label>
-        <select value={lang} onChange={(e) => changeLang(e.target.value as Lang)} aria-label="Language">
-          {LANGS.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.label}
-            </option>
-          ))}
-        </select>
-        <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-pressed={theme === 'dark'}>
-          {theme === 'light' ? t9.themeDark : t9.themeLight}
-        </button>
-      </div>
       <footer className="legal">
         <a href="guides/">{t9.navGuides}</a>
         <a href="about.html">{t9.navAbout}</a>
@@ -1007,127 +980,156 @@ export default function App() {
       </footer>
 
       <main className="main">
-        <div className="stage">
-          <canvas ref={stage} width={960} height={540} onPointerDown={() => setSel(null)} />
-          <div className="sel-layer">
-            {mclips
-              .filter((k) => activeMedia(k, t))
-              .sort((x, y) => x.track - y.track)
-              .map((k) => {
-                const on = sel?.kind === 'media' && sel.id === k.id
-                return (
-                  <div
-                    key={'m' + k.id}
-                    className={'tbox' + (on ? ' on' : '') + (on && picking ? ' pick' : '')}
-                    style={{ left: `${((k.x - k.w / 2) / 1920) * 100}%`, top: `${((k.y - k.h / 2) / 1080) * 100}%`, width: `${(k.w / 1920) * 100}%`, height: `${(k.h / 1080) * 100}%` }}
-                    onPointerDown={(e) => {
-                      e.stopPropagation()
-                      e.preventDefault()
-                      const r = stage.current!.getBoundingClientRect()
-                      const kx = 1920 / r.width
-                      if (on && picking) {
-                        const b = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                        const col = sampleColor(k, (e.clientX - b.left) / b.width, (e.clientY - b.top) / b.height)
-                        if (col) patchMedia(k.id, { key: col })
-                        setPicking(false)
-                        return
-                      }
-                      setSel({ kind: 'media', id: k.id })
-                      const x0 = e.clientX, y0 = e.clientY, ox = k.x, oy = k.y
-                      const mv = (ev: PointerEvent) => patchMedia(k.id, { x: Math.round(ox + (ev.clientX - x0) * kx), y: Math.round(oy + (ev.clientY - y0) * kx) })
-                      const up = () => {
-                        window.removeEventListener('pointermove', mv)
-                        window.removeEventListener('pointerup', up)
-                      }
-                      window.addEventListener('pointermove', mv)
-                      window.addEventListener('pointerup', up)
-                    }}
-                  >
-                    {on &&
-                      !picking &&
-                      (['nw', 'ne', 'sw', 'se'] as const).map((c) => (
-                        <i
-                          key={c}
-                          className={'h ' + c}
-                          onPointerDown={(e) => {
-                            e.stopPropagation()
-                            e.preventDefault()
-                            const r = stage.current!.getBoundingClientRect()
-                            const cx = r.left + (k.x / 1920) * r.width
-                            const cy = r.top + (k.y / 1080) * r.height
-                            const d0 = Math.max(10, Math.hypot(e.clientX - cx, e.clientY - cy))
-                            const w0 = k.w, h0 = k.h
-                            const mv = (ev: PointerEvent) => {
-                              const f = Math.min(8, Math.max(0.05, Math.hypot(ev.clientX - cx, ev.clientY - cy) / d0))
-                              patchMedia(k.id, { w: Math.round(w0 * f), h: Math.round(h0 * f) })
-                            }
-                            const up = () => {
-                              window.removeEventListener('pointermove', mv)
-                              window.removeEventListener('pointerup', up)
-                            }
-                            window.addEventListener('pointermove', mv)
-                            window.addEventListener('pointerup', up)
-                          }}
-                        />
-                      ))}
-                  </div>
-                )
-              })}
-            {texts
-              .filter((k) => k.text.trim() && activeAt(k, t))
-              .sort((x, y) => x.track - y.track)
-              .map((k) => {
-                const bx = boxOf(k)
-                const on = sel?.kind === 'text' && sel.id === k.id
-                return (
-                  <div
-                    key={k.id}
-                    className={'tbox' + (on ? ' on' : '')}
-                    style={{ left: `${(bx.x / 1920) * 100}%`, top: `${(bx.y / 1080) * 100}%`, width: `${(bx.w / 1920) * 100}%`, height: `${(bx.h / 1080) * 100}%` }}
-                    onPointerDown={(e) => {
-                      e.stopPropagation()
-                      e.preventDefault()
-                      setSel({ kind: 'text', id: k.id })
-                      const r = stage.current!.getBoundingClientRect()
-                      const kx = 1920 / r.width
-                      const x0 = e.clientX, y0 = e.clientY, ox = k.x, oy = k.y
-                      const mv = (ev: PointerEvent) => patchText(k.id, { x: Math.round(ox + (ev.clientX - x0) * kx), y: Math.round(oy + (ev.clientY - y0) * kx) })
-                      const up = () => {
-                        window.removeEventListener('pointermove', mv)
-                        window.removeEventListener('pointerup', up)
-                      }
-                      window.addEventListener('pointermove', mv)
-                      window.addEventListener('pointerup', up)
-                    }}
-                  >
-                    {on &&
-                      (['nw', 'ne', 'sw', 'se'] as const).map((c) => (
-                        <i
-                          key={c}
-                          className={'h ' + c}
-                          onPointerDown={(e) => {
-                            e.stopPropagation()
-                            e.preventDefault()
-                            const r = stage.current!.getBoundingClientRect()
-                            const cx = r.left + (k.x / 1920) * r.width
-                            const cy = r.top + (k.y / 1080) * r.height
-                            const d0 = Math.max(10, Math.hypot(e.clientX - cx, e.clientY - cy))
-                            const s0 = k.size
-                            const mv = (ev: PointerEvent) => patchText(k.id, { size: Math.round(Math.min(500, Math.max(16, (s0 * Math.hypot(ev.clientX - cx, ev.clientY - cy)) / d0))) })
-                            const up = () => {
-                              window.removeEventListener('pointermove', mv)
-                              window.removeEventListener('pointerup', up)
-                            }
-                            window.addEventListener('pointermove', mv)
-                            window.addEventListener('pointerup', up)
-                          }}
-                        />
-                      ))}
-                  </div>
-                )
-              })}
+        <div className="stagerow">
+          <div className="stage">
+            <canvas ref={stage} width={960} height={540} onPointerDown={() => setSel(null)} />
+            <div className="sel-layer">
+              {mclips
+                .filter((k) => activeMedia(k, t))
+                .sort((x, y) => x.track - y.track)
+                .map((k) => {
+                  const on = sel?.kind === 'media' && sel.id === k.id
+                  return (
+                    <div
+                      key={'m' + k.id}
+                      className={'tbox' + (on ? ' on' : '') + (on && picking ? ' pick' : '')}
+                      style={{ left: `${((k.x - k.w / 2) / 1920) * 100}%`, top: `${((k.y - k.h / 2) / 1080) * 100}%`, width: `${(k.w / 1920) * 100}%`, height: `${(k.h / 1080) * 100}%` }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        const r = stage.current!.getBoundingClientRect()
+                        const kx = 1920 / r.width
+                        if (on && picking) {
+                          const b = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                          const col = sampleColor(k, (e.clientX - b.left) / b.width, (e.clientY - b.top) / b.height)
+                          if (col) patchMedia(k.id, { key: col })
+                          setPicking(false)
+                          return
+                        }
+                        setSel({ kind: 'media', id: k.id })
+                        const x0 = e.clientX, y0 = e.clientY, ox = k.x, oy = k.y
+                        const mv = (ev: PointerEvent) => patchMedia(k.id, { x: Math.round(ox + (ev.clientX - x0) * kx), y: Math.round(oy + (ev.clientY - y0) * kx) })
+                        const up = () => {
+                          window.removeEventListener('pointermove', mv)
+                          window.removeEventListener('pointerup', up)
+                        }
+                        window.addEventListener('pointermove', mv)
+                        window.addEventListener('pointerup', up)
+                      }}
+                    >
+                      {on &&
+                        !picking &&
+                        (['nw', 'ne', 'sw', 'se'] as const).map((c) => (
+                          <i
+                            key={c}
+                            className={'h ' + c}
+                            onPointerDown={(e) => {
+                              e.stopPropagation()
+                              e.preventDefault()
+                              const r = stage.current!.getBoundingClientRect()
+                              const cx = r.left + (k.x / 1920) * r.width
+                              const cy = r.top + (k.y / 1080) * r.height
+                              const d0 = Math.max(10, Math.hypot(e.clientX - cx, e.clientY - cy))
+                              const w0 = k.w, h0 = k.h
+                              const mv = (ev: PointerEvent) => {
+                                const f = Math.min(8, Math.max(0.05, Math.hypot(ev.clientX - cx, ev.clientY - cy) / d0))
+                                patchMedia(k.id, { w: Math.round(w0 * f), h: Math.round(h0 * f) })
+                              }
+                              const up = () => {
+                                window.removeEventListener('pointermove', mv)
+                                window.removeEventListener('pointerup', up)
+                              }
+                              window.addEventListener('pointermove', mv)
+                              window.addEventListener('pointerup', up)
+                            }}
+                          />
+                        ))}
+                    </div>
+                  )
+                })}
+              {texts
+                .filter((k) => k.text.trim() && activeAt(k, t))
+                .sort((x, y) => x.track - y.track)
+                .map((k) => {
+                  const bx = boxOf(k)
+                  const on = sel?.kind === 'text' && sel.id === k.id
+                  return (
+                    <div
+                      key={k.id}
+                      className={'tbox' + (on ? ' on' : '')}
+                      style={{ left: `${(bx.x / 1920) * 100}%`, top: `${(bx.y / 1080) * 100}%`, width: `${(bx.w / 1920) * 100}%`, height: `${(bx.h / 1080) * 100}%` }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        setSel({ kind: 'text', id: k.id })
+                        const r = stage.current!.getBoundingClientRect()
+                        const kx = 1920 / r.width
+                        const x0 = e.clientX, y0 = e.clientY, ox = k.x, oy = k.y
+                        const mv = (ev: PointerEvent) => patchText(k.id, { x: Math.round(ox + (ev.clientX - x0) * kx), y: Math.round(oy + (ev.clientY - y0) * kx) })
+                        const up = () => {
+                          window.removeEventListener('pointermove', mv)
+                          window.removeEventListener('pointerup', up)
+                        }
+                        window.addEventListener('pointermove', mv)
+                        window.addEventListener('pointerup', up)
+                      }}
+                    >
+                      {on &&
+                        (['nw', 'ne', 'sw', 'se'] as const).map((c) => (
+                          <i
+                            key={c}
+                            className={'h ' + c}
+                            onPointerDown={(e) => {
+                              e.stopPropagation()
+                              e.preventDefault()
+                              const r = stage.current!.getBoundingClientRect()
+                              const cx = r.left + (k.x / 1920) * r.width
+                              const cy = r.top + (k.y / 1080) * r.height
+                              const d0 = Math.max(10, Math.hypot(e.clientX - cx, e.clientY - cy))
+                              const s0 = k.size
+                              const mv = (ev: PointerEvent) => patchText(k.id, { size: Math.round(Math.min(500, Math.max(16, (s0 * Math.hypot(ev.clientX - cx, ev.clientY - cy)) / d0))) })
+                              const up = () => {
+                                window.removeEventListener('pointermove', mv)
+                                window.removeEventListener('pointerup', up)
+                              }
+                              window.addEventListener('pointermove', mv)
+                              window.addEventListener('pointerup', up)
+                            }}
+                          />
+                        ))}
+                    </div>
+                  )
+                })}
+            </div>
+            {!ready && <div className="loading">{t9.loadingFonts}</div>}
           </div>
-          {!ready && <div className="loading">{t9.loadingFonts}</div>}
+          <div className="tools dock">
+            <button onClick={newProject}>{t9.newProject}</button>
+            <button onClick={saveProject}>{t9.saveProject}</button>
+            <label className="btn">
+              {t9.openProject}
+              <input
+                type="file"
+                accept=".nadiralbum,application/json"
+                hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) openProject(f)
+                  e.target.value = ''
+                }}
+              />
+            </label>
+            <select value={lang} onChange={(e) => changeLang(e.target.value as Lang)} aria-label="Language">
+              {LANGS.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-pressed={theme === 'dark'}>
+              {theme === 'light' ? t9.themeDark : t9.themeLight}
+            </button>
+          </div>
         </div>
         <div className="bar">
           <button className="play" onClick={() => setPlaying((p) => !p)}>

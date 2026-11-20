@@ -39,7 +39,7 @@ button { cursor: pointer; }
 .app {
   display: grid;
   grid-template-columns: 440px minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0 22px;
   max-width: 1600px;
   height: 100vh;
@@ -193,7 +193,7 @@ button { cursor: pointer; }
 .ogrid button.on, .cgrid button.on { border: 2px solid var(--accent); }
 
 .main { min-height: 0; overflow-y: auto; gap: 8px; }
-.stage { width: min(100%, 72vh, 1400px); align-self: center; flex: none; }
+.stage { width: min(100%, 150vh, 1500px); align-self: center; flex: none; }
 .bar { flex: none; flex-wrap: nowrap; gap: 10px; }
 .bar .go { margin: 0; padding: 5px 12px; font-size: 13px; white-space: nowrap; }
 .bar select { width: auto; min-width: 0; font-size: 13px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 8px; }
@@ -401,15 +401,12 @@ body {
 .cgrid button { width: 24px; height: 22px; padding: 0; border: 1px solid #777; border-radius: 0; cursor: pointer; }
 .cgrid button.on { outline: 2px solid #000; outline-offset: 1px; }
 
-footer.legal{grid-column:1;grid-row:4;display:flex;flex-wrap:wrap;gap:2px 14px;justify-content:center;font-size:12px;padding-top:5px}
+footer.legal{grid-column:1;grid-row:3;display:flex;flex-wrap:wrap;gap:2px 14px;justify-content:center;font-size:12px;padding-top:5px}
 footer.legal a{color:var(--muted);text-decoration:none}
 footer.legal a:hover{text-decoration:underline}
 .panel{grid-column:1;grid-row:2}
-.main{grid-column:2;grid-row:2 / span 3}
-.tools.dock{grid-column:1;grid-row:3;padding-top:8px;justify-content:center}
-.top{padding-bottom:4px}
-.top p{display:none}
-@media (max-width:900px){footer.legal,.panel,.main,.tools.dock{grid-column:1;grid-row:auto}}
+.main{grid-column:2;grid-row:2 / span 2}
+@media (max-width:900px){footer.legal,.panel,.main{grid-column:1;grid-row:auto}}
 
 .tlrow.aud { border-bottom: 1px solid var(--tl-line, var(--line)); }
 .clip.mda { background: #e0762b; color: #fff; font-size: 12px; display: flex; align-items: center; cursor: grab; padding: 0 10px; white-space: nowrap; touch-action: none; border: 1px solid rgba(255,255,255,.4); }
@@ -421,4 +418,8 @@ footer.legal a:hover{text-decoration:underline}
 .keys button.on { outline: 2px solid var(--accent); }
 .keys .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid #888; vertical-align: -1px; margin-inline-end: 4px; }
 .mrow .tllab.note { font-size: 20px; line-height: 28px; color: #e0762b; }
-.tools.dock{gap:5px;flex-wrap:nowrap}.tools.dock button,.tools.dock .btn,.tools.dock select{padding:6px 8px;font-size:12.5px;white-space:nowrap}
+.stagerow{display:flex;gap:12px;align-items:flex-start;flex:none}
+.stagerow .stage{flex:1 1 0;min-width:0;width:auto;max-width:150vh;align-self:flex-start}
+.tools.dock{flex:0 0 138px;flex-direction:column;align-items:stretch;gap:6px}
+.tools.dock button,.tools.dock .btn,.tools.dock select{padding:7px 8px;font-size:13px;white-space:nowrap;text-align:center;width:100%}
+@media (max-width:900px){.stagerow{flex-direction:column}.tools.dock{flex:none;flex-direction:row;flex-wrap:wrap}.tools.dock button,.tools.dock .btn,.tools.dock select{width:auto}}
