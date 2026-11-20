@@ -594,33 +594,6 @@ export default function App() {
           <h1>Nadir Photo Album</h1>
           <p>{t9.tagline}</p>
         </div>
-        <div className="tools">
-          <button onClick={newProject}>{t9.newProject}</button>
-          <button onClick={saveProject}>{t9.saveProject}</button>
-          <label className="btn">
-            {t9.openProject}
-            <input
-              type="file"
-              accept=".nadiralbum,application/json"
-              hidden
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) openProject(f)
-                e.target.value = ''
-              }}
-            />
-          </label>
-          <select value={lang} onChange={(e) => changeLang(e.target.value as Lang)} aria-label="Language">
-            {LANGS.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.label}
-              </option>
-            ))}
-          </select>
-          <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-pressed={theme === 'dark'}>
-            {theme === 'light' ? t9.themeDark : t9.themeLight}
-          </button>
-        </div>
       </header>
 
       <aside className="panel">
@@ -998,6 +971,33 @@ export default function App() {
           )}
         </div>
       </aside>
+      <div className="tools dock">
+        <button onClick={newProject}>{t9.newProject}</button>
+        <button onClick={saveProject}>{t9.saveProject}</button>
+        <label className="btn">
+          {t9.openProject}
+          <input
+            type="file"
+            accept=".nadiralbum,application/json"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) openProject(f)
+              e.target.value = ''
+            }}
+          />
+        </label>
+        <select value={lang} onChange={(e) => changeLang(e.target.value as Lang)} aria-label="Language">
+          {LANGS.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+        <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-pressed={theme === 'dark'}>
+          {theme === 'light' ? t9.themeDark : t9.themeLight}
+        </button>
+      </div>
       <footer className="legal">
         <a href="guides/">{t9.navGuides}</a>
         <a href="about.html">{t9.navAbout}</a>

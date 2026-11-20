@@ -65,6 +65,9 @@ const SIMPLE: Template[] = Array.from({ length: 15 }, (_, i) => {
   return makeLong({ ...d, occ: 'simple', plain: true, pal: toBlack(d.pal) })
 })
 
+/** length of every "general" design: the intro plays, then the photos keep showing until the end */
+const LEGACY_SEC = 30
+
 /** The 22 short designs kept from the first version (two from each old category) live in "general". */
 const LEGACY: Template[] = OCCASIONS.flatMap((occ, k) =>
   [
@@ -83,10 +86,10 @@ const LEGACY: Template[] = OCCASIONS.flatMap((occ, k) =>
       num: k * 2 + n + 1,
       tag: occ,
       defaultWin: (r) => {
-        const d = l.duration(r)
+        const d = LEGACY_SEC
         return { headline: [0, d], name1: [0, d], connector: [0, d], name2: [0, d], date: [0, d], place: [0, d], footer: [0, d] }
       },
-      duration: l.duration,
+      duration: () => LEGACY_SEC,
       render: l.make(pal),
     }
   }),
