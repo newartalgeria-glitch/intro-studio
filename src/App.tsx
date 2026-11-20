@@ -659,7 +659,7 @@ export default function App() {
                     <button className={sel?.kind === 'text' && sel.id === k.id ? 'on' : ''} onClick={() => { setSel({ kind: 'text', id: k.id }); seek(k.start + 0.5) }}>
                       <span>{k.text.replace(/\n/g, ' ')}</span>
                       <small>
-                        {fmt(k.start)} · {t9.tlTrack} {k.track + 2}
+                        {fmt(k.start)} · {t9.tlTextLab} {k.track + 1}
                       </small>
                     </button>
                   </li>

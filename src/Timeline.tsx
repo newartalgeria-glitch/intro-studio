@@ -194,7 +194,7 @@ export function Timeline(p: Props) {
           </div>
 
           <div className="tlrow">
-            <div className="tllab">{t9.tlTrack} 1</div>
+            <div className="tllab">{t9.tlPhotosLab}</div>
             <div className="tllane photo" style={{ width }} onPointerDown={seekAt}>
               {p.photos.length === 0 && <div className="clip ghost" style={{ left: 0, width }}>{t9.tlSample}</div>}
               {p.editable &&
@@ -239,7 +239,7 @@ export function Timeline(p: Props) {
           {Array.from({ length: nTracks }, (_, tr) => (
             <div key={'tt' + tr} className="tlrow">
               <div className="tllab">
-                {t9.tlTrack} {tr + 2}
+                {t9.tlTextLab} {tr + 1}
               </div>
               <div className="tllane" style={{ width }} onPointerDown={(e) => { p.onSel(null); seekAt(e) }}>
                 {p.texts
