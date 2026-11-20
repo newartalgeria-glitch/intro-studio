@@ -29,6 +29,8 @@ export interface Design {
   recipe: Recipe
   sec: number
   pal: Palette
+  /** true = plain black background, no motifs (the "simple" templates) */
+  plain?: boolean
 }
 
 interface R4 {
@@ -175,7 +177,10 @@ export function makeLong(d: Design): Template {
         const u = clamp(l / (dur + 1.2))
         const ps = pose(d.recipe.phases[phase][0], u)
         // ---- background ----
-        if (d.bg === 'blur') {
+        if (d.plain) {
+          c.fillStyle = '#000'
+          c.fillRect(0, 0, W, H)
+        } else if (d.bg === 'blur') {
           c.save()
           c.translate(W / 2 - ps.x * 900, H / 2 - ps.y * 500)
           c.scale(1.3 + 0.08 * u, 1.3 + 0.08 * u)
@@ -244,8 +249,11 @@ export function makeLong(d: Design): Template {
           c.fillRect(0, 0, W, H)
           c.restore()
         }
-        drawScene(c, t, r, d.scene, pal, d.bg === 'blur')
-        if (d.bg === 'blur') {
+        if (d.plain) {
+          c.fillStyle = '#000'
+          c.fillRect(0, 0, W, H)
+        } else drawScene(c, t, r, d.scene, pal, d.bg === 'blur')
+        if (!d.plain && d.bg === 'blur') {
           // behind the motifs, newest layer first (destination-over stacks each new draw underneath)
           c.save()
           c.globalCompositeOperation = 'destination-over'

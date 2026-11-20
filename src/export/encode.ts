@@ -1,5 +1,5 @@
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
-import { renderFrame } from '../engine'
+import { prepareMedia, renderFrame } from '../engine'
 import type { RenderCtx, Template } from '../engine'
 
 type Cand = { codec: string; mux: 'avc' | 'vp9'; label: string }
@@ -130,6 +130,7 @@ export async function exportMp4(o: ExportOpts): Promise<{ blob: Blob; codec: str
       throw new Error('ABORTED')
     }
     if (failure) throw failure
+    if (o.rc.mclips.length) await prepareMedia(o.rc.mclips, i / fps)
     renderFrame(canvas, o.tpl, o.rc, i / fps)
     const frame = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / fps), duration: Math.round(1e6 / fps) })
     encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 })

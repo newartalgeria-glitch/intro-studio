@@ -5,6 +5,8 @@ import { placeholders } from './pics'
 import { DEFAULT_PHOTO_SEC } from './long'
 import { drawTexts } from './textclips'
 import type { TextClip } from './textclips'
+import { drawMedia } from './mediaclips'
+import type { MediaClip } from './mediaclips'
 import { reset, seg, setActiveStyles, setActiveTimes } from './util'
 
 export const TEMPLATES: Template[] = CATALOG
@@ -20,6 +22,8 @@ export type { IntroData, Pic, RenderCtx, Template, Kind, FieldKey, FieldStyle, F
 export { FONTS } from './fonts'
 export { boxOf, activeAt, defaultFont } from './textclips'
 export type { TextClip, Box } from './textclips'
+export { drawMedia, syncVideos, prepareMedia, loadMedia, setMediaSrc, dropMediaSrc, clearMediaSrc, mediaSrc, setMediaRedraw, sampleColor, activeMedia } from './mediaclips'
+export type { MediaClip, MediaSrc } from './mediaclips'
 export { PRESETS, SHAPES, MOTIONS, drawPreset } from './overlays'
 export type { Preset } from './overlays'
 export type { OverlayItem, Transition, Motion, Shape } from './types'
@@ -39,6 +43,7 @@ export interface Extras {
   wins?: Partial<Wins>
   tpl?: Template
   texts?: TextClip[]
+  mclips?: MediaClip[]
 }
 
 const FIELDS: FieldKey[] = ['headline', 'name1', 'connector', 'name2', 'date', 'place', 'footer']
@@ -60,6 +65,7 @@ export function makeRenderCtx(data: IntroData, photos: Pic[], styles: FieldStyle
   }
   const r: RenderCtx = {
     texts: x.texts ?? [],
+    mclips: x.mclips ?? [],
     W: 1920,
     H: 1080,
     data,
@@ -103,6 +109,8 @@ export function renderFrame(
   tpl.render(c, t, rc)
   reset(c)
   drawOverlays(c, t, rc)
+  reset(c)
+  drawMedia(c, t, rc.mclips)
   reset(c)
   drawTexts(c, t, rc.texts)
   reset(c)

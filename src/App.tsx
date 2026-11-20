@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_PHOTO_SEC, FONTS, OCCASIONS, PRESETS, TEMPLATES, TRANSITIONS, activeAt, boxOf, defaultFont, drawPreset, loadFonts, makeRenderCtx, renderFrame, resolveId } from './engine'
-import type { FieldStyles, IntroData, Motion, OverlayItem, Pic, TextClip, Transition } from './engine'
+import { DEFAULT_PHOTO_SEC, FONTS, activeMedia, clearMediaSrc, dropMediaSrc, loadMedia, mediaSrc, sampleColor, setMediaRedraw, setMediaSrc, syncVideos, OCCASIONS, PRESETS, TEMPLATES, TRANSITIONS, activeAt, boxOf, defaultFont, drawPreset, loadFonts, makeRenderCtx, renderFrame, resolveId } from './engine'
+import type { FieldStyles, IntroData, MediaClip, Motion, OverlayItem, Pic, TextClip, Transition } from './engine'
 import { Timeline } from './Timeline'
 import type { Sel } from './Timeline'
 import { Player, clipLen, decodeDataUrl, decodeFile, mixdown, peaks } from './audio'
@@ -9,7 +9,7 @@ import { loadOverlayImage, loadPhoto } from './engine/pics'
 import { exportMp4, webCodecsAvailable } from './export/encode'
 import { DICT, LANGS } from './i18n'
 import type { Lang } from './i18n'
-import { askSaveLocation, overlayToDataUrl, parseProject, photoToDataUrl, pickerError, writeTo } from './project'
+import { askSaveLocation, blobToDataUrl, overlayToDataUrl, parseProject, photoToDataUrl, pickerError, writeTo } from './project'
 import type { SaveHandle } from './project'
 import type { ProjectFile } from './project'
 
@@ -19,7 +19,7 @@ interface Photo {
   thumb: string
   dur: number
 }
-type Tab = 'templates' | 'text' | 'photos' | 'overlays' | 'motion' | 'music'
+type Tab = 'templates' | 'text' | 'photos' | 'overlays' | 'motion' | 'music' | 'chroma'
 const MAX_PHOTOS = 40
 interface Custom {
   id: number
@@ -99,6 +99,8 @@ export default function App() {
   const t9 = DICT[lang]
 
   const [texts, setTexts] = useState<TextClip[]>([])
+  const [mclips, setMclips] = useState<MediaClip[]>([])
+  const [picking, setPicking] = useState(false)
   const [sel, setSel] = useState<Sel>(null)
   const [modal, setModal] = useState<string | null>(null)
   const [music, setMusic] = useState<Music | null>(null)
@@ -153,8 +155,9 @@ export default function App() {
         tpl,
         length,
         texts,
+        mclips,
       }),
-    [photos, overlays, customs, transition, tpl, length, texts],
+    [photos, overlays, customs, transition, tpl, length, texts, mclips],
   )
   const occ = tpl.occasion
   const dur = tpl.duration(rc)
@@ -179,6 +182,15 @@ export default function App() {
     if (!ready || !stage.current) return
     renderFrame(stage.current, tpl, rc, tRef.current)
   }, [ready, tpl, rc])
+  useEffect(() => {
+    syncVideos(mclips, t, playing)
+  }, [mclips, t, playing])
+  const drawRef = useRef(draw)
+  drawRef.current = draw
+  useEffect(() => {
+    setMediaRedraw(() => drawRef.current())
+    return () => setMediaRedraw(null)
+  }, [])
   useEffect(draw, [draw, t])
 
   useEffect(() => {
@@ -254,9 +266,47 @@ export default function App() {
     tRef.current = Math.min(start + Math.min(1, len / 2), dur)
     setT(tRef.current)
   }
+  // ---- chroma-key media ----
+  const selMedia = sel?.kind === 'media' ? mclips.find((k) => k.id === sel.id) : undefined
+  const patchMedia = (id: number, patch: Partial<MediaClip>) => setMclips((l) => l.map((k) => (k.id === id ? { ...k, ...patch } : k)))
+  const mOverlap = (a: MediaClip, b: MediaClip) => a.id !== b.id && a.track === b.track && a.start < b.start + b.dur - 0.001 && b.start < a.start + a.dur - 0.001
+  const settleMedia = (id: number) =>
+    setMclips((l) => {
+      const k = l.find((x) => x.id === id)
+      if (!k || !l.some((o) => mOverlap(k, o))) return l
+      let tr = 0
+      while (l.some((o) => mOverlap({ ...k, track: tr }, o))) tr++
+      return l.map((x) => (x.id === id ? { ...x, track: tr } : x))
+    })
+  const makeClip = (id: number, name: string, src: { kind: 'image' | 'video'; w: number; h: number; duration: number }, at: number): MediaClip => {
+    const fit = Math.min(1, 1100 / src.w, 620 / src.h)
+    const start = Math.min(at, Math.max(0, dur - 1))
+    const len = src.kind === 'video' ? Math.min(src.duration, dur - start) : Math.min(5, dur - start)
+    return { id, kind: src.kind, name, start, dur: Math.max(0.5, len), track: 0, x: 960, y: 540, w: Math.round(src.w * fit), h: Math.round(src.h * fit), inPt: 0, key: '', tol: 0.25, feather: 0.12, opacity: 1 }
+  }
+  const addMedia = async (f: File) => {
+    try {
+      const src = await loadMedia(f, f.name)
+      const id = uidRef.current++
+      setMediaSrc(id, src)
+      const base = makeClip(id, f.name.replace(/\.[^.]+$/, '').slice(0, 24), src, tRef.current)
+      setMclips((l) => {
+        let tr = 0
+        while (l.some((o) => mOverlap({ ...base, track: tr }, o))) tr++
+        return [...l, { ...base, track: tr }]
+      })
+      setSel({ kind: 'media', id })
+      setMsg(f.size > 60e6 ? { type: 'err', text: t9.chromaBig } : null)
+    } catch {
+      setMsg({ type: 'err', text: t9.chromaFail })
+    }
+  }
   const removeSel = () => {
     if (!sel) return
-    if (sel.kind === 'text') setTexts((l) => l.filter((k) => k.id !== sel.id))
+    if (sel.kind === 'media') {
+      dropMediaSrc(sel.id)
+      setMclips((l) => l.filter((k) => k.id !== sel.id))
+    } else if (sel.kind === 'text') setTexts((l) => l.filter((k) => k.id !== sel.id))
     else setAclips((l) => l.filter((c) => c.id !== sel.id))
     setSel(null)
   }
@@ -345,6 +395,8 @@ export default function App() {
   const newProject = () => {
     if (!window.confirm(t9.confirmNew)) return
     setTexts([])
+    clearMediaSrc()
+    setMclips([])
     setSel(null)
     setMusic(null)
     setAclips([])
@@ -369,12 +421,13 @@ export default function App() {
     }
     const file: ProjectFile = {
       app: 'nadir-photo-album',
-      version: 3,
+      version: 4,
       durs: photos.map((p) => p.dur),
       length,
       data: NO_DATA,
       styles: NO_STYLES,
       texts,
+      media: await Promise.all(mclips.filter((k) => mediaSrc(k.id)).map(async (k) => ({ clip: k, dataUrl: await blobToDataUrl(mediaSrc(k.id)!.blob) }))),
       audio: music ? { name: music.name, dataUrl: music.dataUrl, volume: music.volume, clips: aclips } : null,
       tplId,
       photos: photos.map((p) => photoToDataUrl(p.pic)),
@@ -390,8 +443,19 @@ export default function App() {
     try {
       const p = await parseProject(f)
       setTexts(p.texts)
+      clearMediaSrc()
+      const mc: MediaClip[] = []
+      for (const m of p.media) {
+        try {
+          setMediaSrc(m.clip.id, await loadMedia(m.blob, m.clip.name + (m.clip.kind === 'video' ? '.mp4' : '')))
+          mc.push(m.clip)
+        } catch {
+          /* skip unreadable media */
+        }
+      }
+      setMclips(mc)
       setSel(null)
-      uidRef.current = Math.max(uidRef.current, ...p.texts.map((k) => k.id + 1), ...(p.audio?.clips.map((c) => c.id + 1) ?? [0]))
+      uidRef.current = Math.max(uidRef.current, ...p.texts.map((k) => k.id + 1), ...mc.map((k) => k.id + 1), ...(p.audio?.clips.map((c) => c.id + 1) ?? [0]))
       if (p.audio) {
         setMusic(await decodeDataUrl(p.audio.name, p.audio.dataUrl, p.audio.volume))
         setAclips(p.audio.clips)
@@ -516,6 +580,7 @@ export default function App() {
     ['overlays', t9.tabOverlays],
     ['motion', t9.tabMotion],
     ['music', t9.tabMusic],
+    ['chroma', t9.tabChroma],
   ]
   const buildRc = useCallback(
     (tp: (typeof TEMPLATES)[number]) => makeRenderCtx(NO_DATA, photos.map((p) => p.pic), NO_STYLES, { transition, durs: photos.map((p) => p.dur), tpl: tp, length: 0 }),
@@ -841,6 +906,87 @@ export default function App() {
             </>
           )}
 
+          {tab === 'chroma' && (
+            <>
+              <label className="btn wide">
+                {t9.chromaAdd}
+                <input
+                  type="file"
+                  accept="image/*,video/*,.mp4,.webm,.mov,.png,.jpg,.jpeg,.webp,.gif"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) addMedia(f)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+              <b className="sub">{t9.chromaList}</b>
+              {mclips.length === 0 && <small>{t9.chromaNone}</small>}
+              <ul className="tlist">
+                {mclips.map((k) => (
+                  <li key={k.id}>
+                    <button className={sel?.kind === 'media' && sel.id === k.id ? 'on' : ''} onClick={() => { setSel({ kind: 'media', id: k.id }); seek(k.start + 0.3) }}>
+                      <span>{k.kind === 'video' ? '▶ ' : ''}{k.name}</span>
+                      <small>{fmt(k.start)}</small>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {selMedia && (
+                <div className="ov">
+                  <b className="sub">{t9.chromaKey}</b>
+                  <div className="keys">
+                    {([
+                      ['', t9.chromaNoKey, '#888888'],
+                      ['#00ff00', t9.chromaGreen, '#00ff00'],
+                      ['#0000ff', t9.chromaBlue, '#0000ff'],
+                      ['#00ffff', t9.chromaWater, '#00ffff'],
+                      ['#000000', t9.chromaBlack, '#000000'],
+                      ['#ffffff', t9.chromaWhite, '#ffffff'],
+                    ] as const).map(([v, label, sw]) => (
+                      <button key={label} className={selMedia.key === v ? 'on' : ''} onClick={() => patchMedia(selMedia.id, { key: v })}>
+                        <i className="sw" style={{ background: sw }} />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="row2">
+                    <div className="f">
+                      <ColorPick value={selMedia.key || '#00ff00'} onChange={(c) => patchMedia(selMedia.id, { key: c })} />
+                    </div>
+                    <button className={'ghost' + (picking ? ' on' : '')} onClick={() => setPicking((v) => !v)}>
+                      {t9.chromaPick}
+                    </button>
+                  </div>
+                  {picking && <small>{t9.chromaPicking}</small>}
+                  <label className="f">
+                    <span>
+                      {t9.chromaTol} ({Math.round(selMedia.tol * 100)})
+                    </span>
+                    <input type="range" min={0} max={1} step={0.01} value={selMedia.tol} onChange={(e) => patchMedia(selMedia.id, { tol: Number(e.target.value) })} />
+                  </label>
+                  <label className="f">
+                    <span>
+                      {t9.chromaFeather} ({Math.round(selMedia.feather * 100)})
+                    </span>
+                    <input type="range" min={0} max={0.6} step={0.01} value={selMedia.feather} onChange={(e) => patchMedia(selMedia.id, { feather: Number(e.target.value) })} />
+                  </label>
+                  <label className="f">
+                    <span>
+                      {t9.chromaLevel} ({Math.round(selMedia.opacity * 100)})
+                    </span>
+                    <input type="range" min={0} max={1} step={0.01} value={selMedia.opacity} onChange={(e) => patchMedia(selMedia.id, { opacity: Number(e.target.value) })} />
+                  </label>
+                  <button className="ghost danger" onClick={removeSel}>
+                    {t9.chromaDel}
+                  </button>
+                </div>
+              )}
+              <small className="hint">{t9.chromaHint}</small>
+            </>
+          )}
+
           {tab === 'motion' && (
             <div className="trs" role="radiogroup" aria-label={t9.transition}>
               {TRANSITIONS.map((k) => (
@@ -864,6 +1010,69 @@ export default function App() {
         <div className="stage">
           <canvas ref={stage} width={960} height={540} onPointerDown={() => setSel(null)} />
           <div className="sel-layer">
+            {mclips
+              .filter((k) => activeMedia(k, t))
+              .sort((x, y) => x.track - y.track)
+              .map((k) => {
+                const on = sel?.kind === 'media' && sel.id === k.id
+                return (
+                  <div
+                    key={'m' + k.id}
+                    className={'tbox' + (on ? ' on' : '') + (on && picking ? ' pick' : '')}
+                    style={{ left: `${((k.x - k.w / 2) / 1920) * 100}%`, top: `${((k.y - k.h / 2) / 1080) * 100}%`, width: `${(k.w / 1920) * 100}%`, height: `${(k.h / 1080) * 100}%` }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      const r = stage.current!.getBoundingClientRect()
+                      const kx = 1920 / r.width
+                      if (on && picking) {
+                        const b = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                        const col = sampleColor(k, (e.clientX - b.left) / b.width, (e.clientY - b.top) / b.height)
+                        if (col) patchMedia(k.id, { key: col })
+                        setPicking(false)
+                        return
+                      }
+                      setSel({ kind: 'media', id: k.id })
+                      const x0 = e.clientX, y0 = e.clientY, ox = k.x, oy = k.y
+                      const mv = (ev: PointerEvent) => patchMedia(k.id, { x: Math.round(ox + (ev.clientX - x0) * kx), y: Math.round(oy + (ev.clientY - y0) * kx) })
+                      const up = () => {
+                        window.removeEventListener('pointermove', mv)
+                        window.removeEventListener('pointerup', up)
+                      }
+                      window.addEventListener('pointermove', mv)
+                      window.addEventListener('pointerup', up)
+                    }}
+                  >
+                    {on &&
+                      !picking &&
+                      (['nw', 'ne', 'sw', 'se'] as const).map((c) => (
+                        <i
+                          key={c}
+                          className={'h ' + c}
+                          onPointerDown={(e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            const r = stage.current!.getBoundingClientRect()
+                            const cx = r.left + (k.x / 1920) * r.width
+                            const cy = r.top + (k.y / 1080) * r.height
+                            const d0 = Math.max(10, Math.hypot(e.clientX - cx, e.clientY - cy))
+                            const w0 = k.w, h0 = k.h
+                            const mv = (ev: PointerEvent) => {
+                              const f = Math.min(8, Math.max(0.05, Math.hypot(ev.clientX - cx, ev.clientY - cy) / d0))
+                              patchMedia(k.id, { w: Math.round(w0 * f), h: Math.round(h0 * f) })
+                            }
+                            const up = () => {
+                              window.removeEventListener('pointermove', mv)
+                              window.removeEventListener('pointerup', up)
+                            }
+                            window.addEventListener('pointermove', mv)
+                            window.addEventListener('pointerup', up)
+                          }}
+                        />
+                      ))}
+                  </div>
+                )
+              })}
             {texts
               .filter((k) => k.text.trim() && activeAt(k, t))
               .sort((x, y) => x.track - y.track)
@@ -964,6 +1173,9 @@ export default function App() {
           photos={photos.map((p) => ({ id: p.id, thumb: p.thumb, dur: p.dur }))}
           editable={long}
           texts={texts}
+          mclips={mclips}
+          onMedia={patchMedia}
+          onMediaSettle={settleMedia}
           audio={music && wave ? { name: music.name, duration: music.buffer.duration, peaks: wave, clips: aclips } : null}
           sel={sel}
           onSel={setSel}
@@ -1027,6 +1239,9 @@ export default function App() {
   )
 }
 
+/** Tab order: "simple" sits right after wedding (the order of OCCASIONS itself must not change: old designs depend on it). */
+const TABS = ['wedding', 'simple', ...OCCASIONS.filter((o) => o !== 'wedding'), 'book']
+
 function TemplateStrip(props: {
   build: (tp: (typeof TEMPLATES)[number]) => ReturnType<typeof makeRenderCtx>
   active: string
@@ -1054,7 +1269,7 @@ function TemplateStrip(props: {
   return (
     <div className="tpls">
       <div className="occs" role="tablist" aria-label={t9.occasions}>
-        {[...OCCASIONS, 'book'].map((o) => (
+        {TABS.map((o) => (
           <button key={o} role="tab" aria-selected={occ === o} onClick={() => props.onOcc(o)}>
             {t9.occ[o]}
           </button>

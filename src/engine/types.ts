@@ -54,10 +54,13 @@ export interface Pic {
 }
 
 import type { TextClip } from './textclips'
+import type { MediaClip } from './mediaclips'
 
 export interface RenderCtx {
   /** free text layers, drawn above everything except the final fade */
   texts: TextClip[]
+  /** chroma-key pictures / logos / videos, drawn above the template and below the texts */
+  mclips: MediaClip[]
   /** logical size - templates always draw in 1920x1080 space */
   W: number
   H: number

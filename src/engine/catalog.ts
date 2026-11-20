@@ -11,7 +11,8 @@ import type { Base, Pattern } from './scenes'
 import type { SpriteId } from './sprites'
 import { RECIPES } from './motion'
 import { makeLong } from './long'
-import type { CardStyle, Side } from './long'
+import type { CardStyle, Design, Side } from './long'
+import { toBlack } from './simple'
 import { KINDS } from './choreo'
 
 export const LAYOUTS = [arch, album, panels, cinema, polaroid]
@@ -35,27 +36,33 @@ const SIDES: Side[] = ['R', 'L', 'T']
 const CARDS: CardStyle[] = ['plain', 'polaroid', 'gold', 'round']
 const SECS = [6, 4, 6, 5]
 
-/** 10 occasions x 15 designs. Each differs in background, motif, motion, frame shape and text position, not only colour. */
-const LONG: Template[] = Object.keys(THEME).flatMap((occ, oi) => {
+/** The i-th of the 15 designs of one occasion. Each differs in background, motif, motion, frame shape and text position, not only colour. */
+function designOf(occ: string, oi: number, i: number): Design {
   const th = THEME[occ]
   const pals = [...PALETTES[occ as Occasion], ...EXTRA[occ as Occasion]]
-  return Array.from({ length: 15 }, (_, i) => {
-    const s0 = (i * 2 + oi) % th.sprites.length
-    const sprites = [0, 1, 2, 3].map((k) => th.sprites[(s0 + k) % th.sprites.length])
-    const layout = KINDS[(i + oi) % KINDS.length]
-    return makeLong({
-      occ,
-      num: i + 1,
-      pal: pals[(i * 2 + oi) % pals.length],
-      layout,
-      bg: i % 4 === 1 ? 'palette' : 'blur',
-      card: CARDS[(i * 3 + oi) % 4],
-      side: SIDES[(i + oi * 2) % 3],
-      recipe: RECIPES[(i + oi * 3) % RECIPES.length],
-      sec: SECS[(i * 2 + oi) % 4],
-      scene: { base: th.bases[(i * 2 + oi) % th.bases.length], pattern: PATTERNS[(i * 3 + oi * 2) % PATTERNS.length], sprites, seed: oi * 40 + i + 1 },
-    })
-  })
+  const s0 = (i * 2 + oi) % th.sprites.length
+  const sprites = [0, 1, 2, 3].map((k) => th.sprites[(s0 + k) % th.sprites.length])
+  return {
+    occ,
+    num: i + 1,
+    pal: pals[(i * 2 + oi) % pals.length],
+    layout: KINDS[(i + oi) % KINDS.length],
+    bg: i % 4 === 1 ? 'palette' : 'blur',
+    card: CARDS[(i * 3 + oi) % 4],
+    side: SIDES[(i + oi * 2) % 3],
+    recipe: RECIPES[(i + oi * 3) % RECIPES.length],
+    sec: SECS[(i * 2 + oi) % 4],
+    scene: { base: th.bases[(i * 2 + oi) % th.bases.length], pattern: PATTERNS[(i * 3 + oi * 2) % PATTERNS.length], sprites, seed: oi * 40 + i + 1 },
+  }
+}
+
+/** 10 occasions x 15 designs. */
+const LONG: Template[] = Object.keys(THEME).flatMap((occ, oi) => Array.from({ length: 15 }, (_, i) => makeLong(designOf(occ, oi, i))))
+
+/** "Simple": the 15 wedding designs without any motif or pattern, on a plain black background. */
+const SIMPLE: Template[] = Array.from({ length: 15 }, (_, i) => {
+  const d = designOf('wedding', 0, i)
+  return makeLong({ ...d, occ: 'simple', plain: true, pal: toBlack(d.pal) })
 })
 
 /** The 22 short designs kept from the first version (two from each old category) live in "general". */
@@ -85,7 +92,7 @@ const LEGACY: Template[] = OCCASIONS.flatMap((occ, k) =>
   }),
 )
 
-export const CATALOG: Template[] = [...LONG, ...LEGACY, ...BOOKS]
+export const CATALOG: Template[] = [...LONG, ...SIMPLE, ...LEGACY, ...BOOKS]
 
 /** Ids from older versions of the tool map to the closest template that still exists. */
 export function resolveId(id: string): string {

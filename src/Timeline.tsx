@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { TextClip } from './engine'
+import type { MediaClip, TextClip } from './engine'
 import type { AudioClip } from './audio'
 import { clipLen } from './audio'
 import type { DICT } from './i18n'
@@ -14,7 +14,7 @@ export interface TlPhoto {
   thumb: string
   dur: number
 }
-export type Sel = { kind: 'text' | 'audio'; id: number } | null
+export type Sel = { kind: 'text' | 'audio' | 'media'; id: number } | null
 
 export interface TlAudio {
   name: string
@@ -32,6 +32,9 @@ interface Props {
   /** long templates let the user time every photo; short ones do it themselves */
   editable: boolean
   texts: TextClip[]
+  mclips: MediaClip[]
+  onMedia: (id: number, patch: Partial<MediaClip>) => void
+  onMediaSettle: (id: number) => void
   audio: TlAudio | null
   sel: Sel
   onSel: (s: Sel) => void
@@ -141,6 +144,8 @@ export function Timeline(p: Props) {
 
   const maxTr = p.texts.reduce((m, k) => Math.max(m, k.track), -1)
   const nTracks = Math.max(3, maxTr + 2)
+  const maxMt = p.mclips.reduce((m, k) => Math.max(m, k.track), -1)
+  const nMTracks = Math.max(1, maxMt + 2)
   let acc = 0
   const clips = p.photos.map((ph) => {
     const start = acc
@@ -350,6 +355,46 @@ export function Timeline(p: Props) {
               })}
             </div>
           </div>
+
+          {Array.from({ length: nMTracks }, (_, tr) => (
+            <div key={'mt' + tr} className="tlrow mrow">
+              <div className="tllab note" title={t9.tlChroma}>{tr === 0 ? '▣' : ''}</div>
+              <div className="tllane" style={{ width }} onPointerDown={(e) => { p.onSel(null); seekAt(e) }}>
+                {tr === 0 && p.mclips.length === 0 && <div className="clip ghost" style={{ left: 0, width: Math.min(width, 380) }}>{t9.tlChroma}: {t9.chromaNone}</div>}
+                {p.mclips
+                  .filter((k) => k.track === tr)
+                  .map((k) => {
+                    const on = p.sel?.kind === 'media' && p.sel.id === k.id
+                    return (
+                      <div
+                        key={k.id}
+                        className={'clip mda' + (on ? ' on' : '')}
+                        style={{ left: k.start * px, width: Math.max(10, k.dur * px) }}
+                        title={`${k.name} · ${fmt(k.start)} → ${fmt(k.start + k.dur)}`}
+                        onPointerDown={(ev) => {
+                          p.onSel({ kind: 'media', id: k.id })
+                          const s0 = k.start
+                          const tr0 = k.track
+                          drag(
+                            ev,
+                            (dt, dy) =>
+                              p.onMedia(k.id, {
+                                start: clamp(Math.round((s0 + dt) * 10) / 10, 0, Math.max(0, total - k.dur)),
+                                track: Math.max(0, tr0 + Math.round(dy / ROW)),
+                              }),
+                            () => p.onMediaSettle(k.id),
+                          )
+                        }}
+                      >
+                        <i className="grip l" onPointerDown={(ev) => { p.onSel({ kind: 'media', id: k.id }); const s0 = k.start, e0 = k.start + k.dur, i0 = k.inPt; drag(ev, (dt) => { const ns = clamp(Math.round((s0 + dt) * 10) / 10, 0, e0 - 0.5); p.onMedia(k.id, { start: ns, dur: e0 - ns, inPt: k.kind === 'video' ? Math.max(0, i0 + (ns - s0)) : 0 }) }, () => p.onMediaSettle(k.id)) }} />
+                        <span>{k.kind === 'video' ? '▶ ' : ''}{k.name}</span>
+                        <i className="grip" onPointerDown={(ev) => { p.onSel({ kind: 'media', id: k.id }); const d0 = k.dur; drag(ev, (dt) => p.onMedia(k.id, { dur: clamp(Math.round((d0 + dt) * 10) / 10, 0.5, total - k.start) }), () => p.onMediaSettle(k.id)) }} />
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          ))}
           <div className="playhead" style={{ left: LAB + t * px }} />
         </div>
       </div>

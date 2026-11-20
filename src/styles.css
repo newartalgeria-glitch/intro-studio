@@ -407,3 +407,14 @@ footer.legal a:hover{text-decoration:underline}
 .panel{grid-column:1;grid-row:2}
 .main{grid-column:2;grid-row:2 / span 2}
 @media (max-width:900px){footer.legal,.panel,.main{grid-column:1;grid-row:auto}}
+
+.tlrow.aud { border-bottom: 1px solid var(--tl-line, var(--line)); }
+.clip.mda { background: #e0762b; color: #fff; font-size: 12px; display: flex; align-items: center; cursor: grab; padding: 0 10px; white-space: nowrap; touch-action: none; border: 1px solid rgba(255,255,255,.4); }
+.clip.mda span { overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.clip.mda.on { outline: 2px solid #fff; box-shadow: 0 0 0 2px #e0762b; z-index: 2; }
+.tbox.pick { cursor: crosshair; outline: 2px dashed #e0762b; }
+.keys { display: flex; flex-wrap: wrap; gap: 6px; }
+.keys button { padding: 4px 8px; font-size: 12px; }
+.keys button.on { outline: 2px solid var(--accent); }
+.keys .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid #888; vertical-align: -1px; margin-inline-end: 4px; }
+.mrow .tllab.note { font-size: 20px; line-height: 28px; color: #e0762b; }
