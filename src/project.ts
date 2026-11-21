@@ -49,10 +49,16 @@ export async function askSaveLocation(name: string, ext: '.mp4' | '.nadiralbum')
     return null
   }
   const types = ext === '.mp4' ? [{ description: 'MP4 video', accept: { 'video/mp4': ['.mp4'] } }] : [{ description: 'Nadir Photo Album', accept: { 'application/json': ['.nadiralbum'] } }]
+  const t0 = performance.now()
   try {
     return await fn.call(window, { suggestedName: plainName(name), types })
   } catch (e) {
     const err = e as Error
+    // a person cannot close a dialog within 1.5 s: some Chrome set-ups refuse the dialog at once -> use the normal download
+    if (err?.name === 'AbortError' && performance.now() - t0 < 1500) {
+      lastPickerError = 'dialog refused by the browser'
+      return null
+    }
     if (err?.name === 'AbortError' && /user aborted|cancel/i.test(err.message || '')) throw new Error('CANCEL')
     lastPickerError = `${err?.name}: ${err?.message}`
     return null

@@ -132,7 +132,7 @@ export default function App() {
   const [quality, setQuality] = useState<'1080' | '720'>('1080')
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string; retry?: boolean; escape?: boolean } | null>(null)
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string; retry?: boolean; escape?: boolean; saveDirect?: boolean } | null>(null)
   const escapeRef = useRef<(() => void) | null>(null)
   /** "where to save?" dialog; the message lets the user fall back to a plain download if the dialog never shows up */
   const pickPlace = (name: string, ext: '.mp4' | '.nadiralbum') =>
@@ -492,15 +492,17 @@ export default function App() {
     setMsg(null)
   }
 
-  const saveProject = async () => {
+  const saveProject = async (direct = false) => {
     const fname = 'nadir-project.nadiralbum'
     let handle: SaveHandle = null
-    try {
-      const h = await pickPlace(fname, '.nadiralbum')
-      handle = h === 'DIRECT' ? null : h
-    } catch {
-      setMsg({ type: 'err', text: t9.saveCancelled })
-      return
+    if (!direct) {
+      try {
+        const h = await pickPlace(fname, '.nadiralbum')
+        handle = h === 'DIRECT' ? null : h
+      } catch {
+        setMsg({ type: 'err', text: t9.saveCancelled, saveDirect: true })
+        return
+      }
     }
     setMsg({ type: 'ok', text: t9.saving })
     try {
@@ -1258,7 +1260,7 @@ export default function App() {
             </button>
             <i className="br" />
             <button className="pri" onClick={newProject}>{t9.newProject}</button>
-            <button onClick={saveProject}>{t9.saveProject}</button>
+            <button onClick={() => saveProject()}>{t9.saveProject}</button>
           </div>
         </div>
         <div className="bar">
@@ -1327,10 +1329,15 @@ export default function App() {
         />
 
         {msg && (
-          <p className={'msg ' + msg.type} onClick={() => !msg.retry && !msg.escape && setMsg(null)}>
+          <p className={'msg ' + msg.type} onClick={() => !msg.retry && !msg.escape && !msg.saveDirect && setMsg(null)}>
             {msg.text}
             {msg.escape && (
               <button className="ghost" style={{ marginInlineStart: 10 }} onClick={() => escapeRef.current?.()}>
+                {t9.directDl}
+              </button>
+            )}
+            {msg.saveDirect && (
+              <button className="ghost" style={{ marginInlineStart: 10 }} onClick={() => saveProject(true)}>
                 {t9.directDl}
               </button>
             )}
