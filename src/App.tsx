@@ -635,7 +635,6 @@ export default function App() {
     setT(tRef.current)
   }
   const setDur = (id: number, d: number) => setPhotos((l) => l.map((p) => (p.id === id ? { ...p, dur: d } : p)))
-  const long = tpl.kind === 'long'
   const tabs: [Tab, string][] = [
     ['templates', t9.tabTemplates],
     ['text', t9.tabText],
@@ -774,7 +773,7 @@ export default function App() {
                 </label>
                 {photos.length === 0 && <small>{t9.noPhotos}</small>}
               </div>
-              {long && photos.length > 0 && (
+              {photos.length > 0 && (
                 <div className="row2">
                   <label className="f">
                     <span>{t9.photoSec}</span>
@@ -798,7 +797,7 @@ export default function App() {
                 {photos.map((p, i) => (
                   <li key={p.id}>
                     <img src={p.thumb} alt={`${i + 1}`} />
-                    {long && (
+                    {(
                       <div className="dsec">
                         <button aria-label="-" onClick={() => setDur(p.id, Math.max(2, Math.round((p.dur - 0.5) * 2) / 2))} disabled={p.dur <= 2}>
                           −
@@ -1251,7 +1250,7 @@ export default function App() {
           t={t}
           playing={playing}
           photos={photos.map((p) => ({ id: p.id, thumb: p.thumb, dur: p.dur }))}
-          editable={long}
+          editable
           texts={texts}
           mclips={mclips}
           onMedia={patchMedia}

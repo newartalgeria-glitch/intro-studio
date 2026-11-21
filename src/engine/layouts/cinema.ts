@@ -24,7 +24,7 @@ export const cinema: Layout = {
       const two = hasTwo(d)
       c.fillStyle = pal.bg1
       c.fillRect(0, 0, W, H)
-      slideshow(c, r, t, 0, 0, W, H, { each: 3.4, fade: 1 })
+      slideshow(c, r, t, 0, 0, W, H, { each: 3.4, fade: 1, durs: r.real ? r.durs : undefined })
       const ov = c.createLinearGradient(0, 0, 0, H)
       ov.addColorStop(0, rgba(pal.bg1, 0.7))
       ov.addColorStop(0.5, rgba(pal.bg0, 0.58))

@@ -85,6 +85,7 @@ export function Timeline(p: Props) {
     window.addEventListener('pointerdown', close)
     return () => window.removeEventListener('pointerdown', close)
   }, [menu])
+  const menuVal = useRef(5)
   const menuPhoto = menu ? p.photos.find((x) => x.id === menu.id) : undefined
   const box = useRef<HTMLDivElement>(null)
   const inner = useRef<HTMLDivElement>(null)
@@ -207,6 +208,7 @@ export function Timeline(p: Props) {
                     onContextMenu={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
+                      menuVal.current = c.dur
                       setMenu({ id: c.id, x: e.clientX, y: e.clientY })
                     }}
                     onPointerDown={(e) => {
@@ -234,7 +236,6 @@ export function Timeline(p: Props) {
                 ))}
             </div>
           </div>
-          {!p.editable && p.photos.length > 0 && <div className="tlnote">{t9.tlLegacyNote}</div>}
 
           {Array.from({ length: nTracks }, (_, tr) => (
             <div key={'tt' + tr} className="tlrow">
@@ -403,15 +404,11 @@ export function Timeline(p: Props) {
           <b>
             {t9.photoSec}: {menuPhoto.dur}
           </b>
-          <div className="presets">
-            {[2, 3, 4, 5, 6, 8, 10, 15].map((d) => (
-              <button key={d} onClick={() => { p.onDur(menu.id, d); setMenu(null) }}>
-                {d}
-              </button>
-            ))}
+          <input key={menu.id} type="number" min={2} max={40} step={0.5} defaultValue={menuPhoto.dur} onChange={(e) => { menuVal.current = Number(e.target.value) }} />
+          <div className="okrow">
+            <button onClick={() => { const v = menuVal.current; if (v >= 2 && v <= 40) p.onDur(menu.id, v); setMenu(null) }}>{t9.ok}</button>
+            <button onClick={() => { const v = menuVal.current; if (v >= 2 && v <= 40) p.onDurAll(v); setMenu(null) }}>{t9.applyAll}</button>
           </div>
-          <input type="number" min={2} max={40} step={0.5} defaultValue={menuPhoto.dur} onChange={(e) => { const v = Number(e.target.value); if (v >= 2 && v <= 40) p.onDur(menu.id, v) }} />
-          <button onClick={() => { p.onDurAll(menuPhoto.dur); setMenu(null) }}>{t9.applyAll}</button>
           <button className="danger" onClick={() => { p.onRemove(menu.id); setMenu(null) }}>✕</button>
         </div>
       )}

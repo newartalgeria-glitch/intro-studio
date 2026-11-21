@@ -54,7 +54,7 @@ export const polaroid: Layout = {
         c.shadowColor = 'transparent'
         // the photo window: draw the slideshow in card space
         c.save()
-        slideshow(c, r, t, -cw / 2 + 24, -ch / 2 + 24, cw - 48, cw - 48, { each: 3, fade: 0.9, start: 2.4 + i * 0.6, first: i, alpha: Math.min(1, p * 1.6) })
+        slideshow(c, r, t, -cw / 2 + 24, -ch / 2 + 24, cw - 48, cw - 48, { each: 3, fade: 0.9, start: 2.4 + i * 0.6, first: i, alpha: Math.min(1, p * 1.6), durs: r.real ? r.durs.slice(i) : undefined })
         c.restore()
         // tape
         c.fillStyle = rgba(pal.frame, 0.55)

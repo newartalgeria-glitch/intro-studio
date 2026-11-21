@@ -438,3 +438,4 @@ footer.legal a:hover{text-decoration:underline}
 
 .thumbs li .dsec{display:flex;justify-content:center;align-items:center;gap:4px;margin-top:4px;font-size:11px}
 .thumbs li .dsec span{min-width:34px;text-align:center}
+.ctx .okrow{display:flex;gap:6px}.ctx .okrow button{flex:1}

@@ -115,7 +115,7 @@ export const arch: Layout = {
         c.save()
         path(0)
         c.clip()
-        slideshow(c, r, t, ax - aw / 2, ay, aw, ah, { each: 3, fade: 0.9, start: 2.4, alpha: ap })
+        slideshow(c, r, t, ax - aw / 2, ay, aw, ah, { each: 3, fade: 0.9, start: 2.4, alpha: ap, durs: r.real ? r.durs : undefined })
         c.restore()
         c.globalAlpha = ap
         c.strokeStyle = pal.frame

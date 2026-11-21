@@ -1,6 +1,6 @@
 import type { FieldKey, FieldStyles, IntroData, OverlayItem, Pic, RenderCtx, Template, Transition, Wins } from './types'
 import { drawOverlays } from './overlays'
-import { CATALOG } from './catalog'
+import { CATALOG, LEGACY_SEC } from './catalog'
 import { placeholders } from './pics'
 import { DEFAULT_PHOTO_SEC } from './long'
 import { drawTexts } from './textclips'
@@ -53,7 +53,7 @@ export function makeRenderCtx(data: IntroData, photos: Pic[], styles: FieldStyle
   const real = photos.length > 0
   const base = real ? photos.map((_, i) => x.durs?.[i] ?? DEFAULT_PHOTO_SEC) : [5, 5, 5, 5, 5, 5]
   const durs = [...base]
-  const want = x.tpl?.kind === 'long' && x.length ? x.length - 2 : 0
+  const want = x.tpl?.kind === 'long' && x.length ? x.length - 2 : x.tpl?.occasion === 'general' && real ? LEGACY_SEC : 0
   if (want > 0) {
     let sum = durs.reduce((a, b) => a + b, 0)
     for (let i = 0; sum < want - 0.5 && i < 400; i++) {

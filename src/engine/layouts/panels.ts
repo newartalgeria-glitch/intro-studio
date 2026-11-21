@@ -39,7 +39,7 @@ export const panels: Layout = {
         c.fillStyle = pal.frame
         c.fillRect(x, y, pw, ph)
         c.restore()
-        slideshow(c, r, t, x, y, pw, ph, { each: 3, fade: 0.9, start: 2.2 + i * 0.5, first: i, alpha: p })
+        slideshow(c, r, t, x, y, pw, ph, { each: 3, fade: 0.9, start: 2.2 + i * 0.5, first: i, alpha: p, durs: r.real ? r.durs.slice(i) : undefined })
       }
 
       const rx = 1790

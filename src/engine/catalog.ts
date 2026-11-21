@@ -66,7 +66,7 @@ const SIMPLE: Template[] = Array.from({ length: 15 }, (_, i) => {
 })
 
 /** length of every "general" design: the intro plays, then the photos keep showing until the end */
-const LEGACY_SEC = 30
+export const LEGACY_SEC = 30
 
 /** The 22 short designs kept from the first version (two from each old category) live in "general". */
 const LEGACY: Template[] = OCCASIONS.flatMap((occ, k) =>
