@@ -481,6 +481,7 @@ export default function App() {
       setMsg({ type: 'err', text: t9.saveCancelled })
       return
     }
+    try {
     const file: ProjectFile = {
       app: 'nadir-photo-album',
       version: 4,
@@ -499,6 +500,9 @@ export default function App() {
     }
     await writeTo(handle, new Blob([JSON.stringify(file)], { type: 'application/json' }), fname)
     setMsg(handle ? { type: 'ok', text: t9.savedChosen } : pickerError() ? { type: 'err', text: `${t9.saved} (${pickerError()})` } : { type: 'ok', text: t9.saved })
+    } catch (e) {
+      setMsg({ type: 'err', text: `${t9.saveProject}: ${String((e as Error)?.message ?? e)}` })
+    }
   }
 
   const openProject = async (f: File) => {
@@ -1271,7 +1275,7 @@ export default function App() {
         />
 
         {msg && (
-          <p className={'msg ' + msg.type}>
+          <p className={'msg ' + msg.type} onClick={() => !msg.retry && setMsg(null)}>
             {msg.text}
             {msg.retry && (
               <button className="ghost" style={{ marginInlineStart: 10 }} onClick={() => doExport(true)}>
