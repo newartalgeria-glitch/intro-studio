@@ -134,12 +134,28 @@ export default function App() {
   const [progress, setProgress] = useState(0)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string; retry?: boolean; escape?: boolean; saveDirect?: boolean } | null>(null)
   const escapeRef = useRef<(() => void) | null>(null)
+  const pickBusy = useRef(false)
   /** "where to save?" dialog; the message lets the user fall back to a plain download if the dialog never shows up */
   const pickPlace = (name: string, ext: '.mp4' | '.nadiralbum') =>
     new Promise<SaveHandle | 'DIRECT'>((res, rej) => {
-      escapeRef.current = () => res('DIRECT')
+      // one dialog at a time: a second click while the first one is open (maybe hidden behind the window) would make Chrome abort it
+      if (pickBusy.current) return rej(new Error('BUSY'))
+      pickBusy.current = true
+      escapeRef.current = () => {
+        pickBusy.current = false
+        res('DIRECT')
+      }
       setMsg({ type: 'ok', text: t9.pickWaiting, escape: true })
-      askSaveLocation(name, ext).then(res, rej)
+      askSaveLocation(name, ext).then(
+        (h) => {
+          pickBusy.current = false
+          res(h)
+        },
+        (e) => {
+          pickBusy.current = false
+          rej(e)
+        },
+      )
     })
   const [drag, setDrag] = useState(false)
   const [allSec, setAllSec] = useState(DEFAULT_PHOTO_SEC)
@@ -499,7 +515,8 @@ export default function App() {
       try {
         const h = await pickPlace(fname, '.nadiralbum')
         handle = h === 'DIRECT' ? null : h
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.message === 'BUSY') return
         setMsg({ type: 'err', text: t9.saveCancelled, saveDirect: true })
         return
       }
@@ -606,7 +623,8 @@ export default function App() {
       try {
         const h = await pickPlace(fname, '.mp4')
         handle = h === 'DIRECT' ? null : h
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.message === 'BUSY') return
         // offer a way out in case the dialog never showed up or was closed by mistake
         setMsg({ type: 'err', text: t9.saveCancelled, retry: true })
         return
