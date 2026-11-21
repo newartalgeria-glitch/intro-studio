@@ -16,6 +16,8 @@ export interface TextClip {
   font: string
   color: string
   bold: boolean
+  /** soft shadow under the text; missing = on (older projects) */
+  shadow?: boolean
 }
 
 const isAr = (s: string) => /[؀-ۿ]/.test(s)
@@ -74,9 +76,11 @@ export function drawTexts(c: CanvasRenderingContext2D, t: number, clips: TextCli
     c.direction = isAr(k.text) ? 'rtl' : 'ltr'
     c.textAlign = 'center'
     c.textBaseline = 'middle'
-    c.shadowColor = 'rgba(0,0,0,0.55)'
-    c.shadowBlur = k.size * 0.12
-    c.shadowOffsetY = k.size * 0.03
+    if (k.shadow !== false) {
+      c.shadowColor = 'rgba(0,0,0,0.55)'
+      c.shadowBlur = k.size * 0.12
+      c.shadowOffsetY = k.size * 0.03
+    }
     c.fillStyle = k.color
     const y0 = k.y - (lh * (lines.length - 1)) / 2
     lines.forEach((l, i) => c.fillText(l, k.x, y0 + i * lh))

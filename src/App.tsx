@@ -120,7 +120,15 @@ export default function App() {
   const [quality, setQuality] = useState<'1080' | '720'>('1080')
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string; retry?: boolean } | null>(null)
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string; retry?: boolean; escape?: boolean } | null>(null)
+  const escapeRef = useRef<(() => void) | null>(null)
+  /** "where to save?" dialog; the message lets the user fall back to a plain download if the dialog never shows up */
+  const pickPlace = (name: string, ext: '.mp4' | '.nadiralbum') =>
+    new Promise<SaveHandle | 'DIRECT'>((res, rej) => {
+      escapeRef.current = () => res('DIRECT')
+      setMsg({ type: 'ok', text: t9.pickWaiting, escape: true })
+      askSaveLocation(name, ext).then(res, rej)
+    })
   const [drag, setDrag] = useState(false)
   const [allSec, setAllSec] = useState(DEFAULT_PHOTO_SEC)
 
@@ -313,7 +321,7 @@ export default function App() {
     if (dur - start < 3) start = Math.max(0, dur - 5)
     const len = Math.min(5, dur - start)
     setTexts((l) => {
-      const k: TextClip = { id, text: body, start, dur: len, track: 0, x: 960, y: 540, size: 110, font: defaultFont(body), color: '#ffffff', bold: true }
+      const k: TextClip = { id, text: body, start, dur: len, track: 0, x: 960, y: 540, size: 110, font: defaultFont(body), color: '#ffffff', bold: true, shadow: true }
       let tr = 0
       while (l.some((o) => overlaps({ ...k, track: tr }, o))) tr++
       return [...l, { ...k, track: tr, y: 540 + [0, 150, -150, 300, -300][tr % 5] }]
@@ -476,11 +484,13 @@ export default function App() {
     const fname = 'nadir-project.nadiralbum'
     let handle: SaveHandle = null
     try {
-      handle = await askSaveLocation(fname, '.nadiralbum')
+      const h = await pickPlace(fname, '.nadiralbum')
+      handle = h === 'DIRECT' ? null : h
     } catch {
       setMsg({ type: 'err', text: t9.saveCancelled })
       return
     }
+    setMsg({ type: 'ok', text: t9.saving })
     try {
     const file: ProjectFile = {
       app: 'nadir-photo-album',
@@ -580,13 +590,15 @@ export default function App() {
     let handle: SaveHandle = null
     if (!direct) {
       try {
-        handle = await askSaveLocation(fname, '.mp4')
+        const h = await pickPlace(fname, '.mp4')
+        handle = h === 'DIRECT' ? null : h
       } catch {
         // offer a way out in case the dialog never showed up or was closed by mistake
         setMsg({ type: 'err', text: t9.saveCancelled, retry: true })
         return
       }
     }
+    setMsg(null)
     setPlaying(false)
     setBusy(true)
     setProgress(0)
@@ -731,6 +743,10 @@ export default function App() {
                     <label className="chk">
                       <input type="checkbox" checked={selText.bold} onChange={(e) => patchText(selText.id, { bold: e.target.checked })} />
                       {t9.bold}
+                    </label>
+                    <label className="chk">
+                      <input type="checkbox" checked={selText.shadow !== false} onChange={(e) => patchText(selText.id, { shadow: e.target.checked })} />
+                      {t9.shadow}
                     </label>
                   </div>
                   <button className="ghost" onClick={() => patchText(selText.id, { x: 960, y: 540 })}>
@@ -1275,8 +1291,13 @@ export default function App() {
         />
 
         {msg && (
-          <p className={'msg ' + msg.type} onClick={() => !msg.retry && setMsg(null)}>
+          <p className={'msg ' + msg.type} onClick={() => !msg.retry && !msg.escape && setMsg(null)}>
             {msg.text}
+            {msg.escape && (
+              <button className="ghost" style={{ marginInlineStart: 10 }} onClick={() => escapeRef.current?.()}>
+                {t9.directDl}
+              </button>
+            )}
             {msg.retry && (
               <button className="ghost" style={{ marginInlineStart: 10 }} onClick={() => doExport(true)}>
                 {t9.exportDirect}
