@@ -48,6 +48,13 @@ export async function askSaveLocation(name: string, ext: '.mp4' | '.nadiralbum')
     lastPickerError = 'showSaveFilePicker unavailable'
     return null
   }
+  // Google Chrome cancels its own "save as" dialog on some PCs even when the user confirms (seen here), while the normal
+  // download works and asks for the place when the browser option "always ask where to save" is on -> Chrome uses the normal download.
+  const ua = navigator.userAgent
+  if (/Chrome\//.test(ua) && !/OPR\/|Edg\/|Brave/.test(ua)) {
+    lastPickerError = ''
+    return null
+  }
   const types = ext === '.mp4' ? [{ description: 'MP4 video', accept: { 'video/mp4': ['.mp4'] } }] : [{ description: 'Nadir Photo Album', accept: { 'application/json': ['.nadiralbum'] } }]
   const t0 = performance.now()
   try {
