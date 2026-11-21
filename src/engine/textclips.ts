@@ -21,6 +21,8 @@ export interface TextClip {
   /** shadow colour (default black) and strength (default 1; bigger = longer, darker) */
   shadowColor?: string
   shadowAmt?: number
+  /** 0 = crisp copy of the letters, 1 = soft */
+  shadowBlur?: number
 }
 
 function hexA(h: string, a: number) {
@@ -89,13 +91,12 @@ export function drawTexts(c: CanvasRenderingContext2D, t: number, clips: TextCli
     const paint = () => lines.forEach((l, i) => c.fillText(l, k.x, y0 + i * lh))
     c.fillStyle = k.color
     if (k.shadow !== false) {
+      // a copy of the letters moved down-right: it follows every curve of the glyphs; blur 0 = crisp
       const amt = k.shadowAmt ?? 1
-      c.shadowColor = hexA(k.shadowColor ?? '#000000', Math.min(1, 0.55 + 0.2 * (amt - 1)))
-      c.shadowBlur = k.size * 0.12 * amt
-      c.shadowOffsetY = k.size * 0.03 * amt
-      c.shadowOffsetX = k.size * 0.01 * amt
-      // a single pass of a soft shadow is faint: stack it for stronger settings
-      for (let n = amt > 1.8 ? 2 : 0; n > 0; n--) paint()
+      c.shadowColor = hexA(k.shadowColor ?? '#000000', Math.min(1, 0.7 + 0.15 * (amt - 1)))
+      c.shadowBlur = k.size * 0.1 * (k.shadowBlur ?? 0.12) * Math.max(1, amt)
+      c.shadowOffsetX = k.size * 0.035 * amt
+      c.shadowOffsetY = k.size * 0.035 * amt
     }
     paint()
     c.restore()

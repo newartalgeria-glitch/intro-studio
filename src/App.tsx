@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_PHOTO_SEC, FONTS, activeMedia, clearMediaSrc, loadMedia, mediaSrc, sampleColor, setMediaRedraw, setMediaSrc, syncVideos, OCCASIONS, PRESETS, TEMPLATES, TRANSITIONS, activeAt, boxOf, defaultFont, drawPreset, loadFonts, makeRenderCtx, renderFrame, resolveId } from './engine'
 import type { FieldStyles, IntroData, MediaClip, Motion, OverlayItem, Pic, TextClip, Transition } from './engine'
 import { Timeline } from './Timeline'
@@ -40,6 +40,18 @@ const BASIC = [
 
 function ColorPick({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const sw = useRef<HTMLButtonElement>(null)
+  const grid = useRef<HTMLDivElement>(null)
+  // the palette is placed in the window (not inside the scrolling panel) and kept fully visible
+  useLayoutEffect(() => {
+    if (!open || !sw.current || !grid.current) return setPos(null)
+    const r = sw.current.getBoundingClientRect()
+    const g = grid.current.getBoundingClientRect()
+    const left = Math.min(Math.max(8, r.left), window.innerWidth - g.width - 8)
+    const top = r.bottom + 6 + g.height > window.innerHeight - 8 ? Math.max(8, r.top - g.height - 6) : r.bottom + 6
+    setPos({ left, top })
+  }, [open])
   useEffect(() => {
     if (!open) return
     const close = () => setOpen(false)
@@ -48,9 +60,9 @@ function ColorPick({ value, onChange }: { value: string; onChange: (c: string) =
   }, [open])
   return (
     <div className="cpick" onPointerDown={(e) => e.stopPropagation()}>
-      <button type="button" className="cswatch" style={{ background: value }} onClick={() => setOpen((o) => !o)} aria-label="color" />
+      <button type="button" ref={sw} className="cswatch" style={{ background: value }} onClick={() => setOpen((o) => !o)} aria-label="color" />
       {open && (
-        <div className="cgrid">
+        <div className="cgrid" ref={grid} style={pos ? { left: pos.left, top: pos.top } : { visibility: 'hidden', left: 0, top: 0 }}>
           {BASIC.map((c) => (
             <button
               type="button"
@@ -321,7 +333,7 @@ export default function App() {
     if (dur - start < 3) start = Math.max(0, dur - 5)
     const len = Math.min(5, dur - start)
     setTexts((l) => {
-      const k: TextClip = { id, text: body, start, dur: len, track: 0, x: 960, y: 540, size: 110, font: defaultFont(body), color: '#ffffff', bold: true, shadow: true, shadowAmt: 1.6 }
+      const k: TextClip = { id, text: body, start, dur: len, track: 0, x: 960, y: 540, size: 110, font: defaultFont(body), color: '#ffffff', bold: true, shadow: true, shadowAmt: 1, shadowBlur: 0.12 }
       let tr = 0
       while (l.some((o) => overlaps({ ...k, track: tr }, o))) tr++
       return [...l, { ...k, track: tr, y: 540 + [0, 150, -150, 300, -300][tr % 5] }]
@@ -744,24 +756,34 @@ export default function App() {
                       <input type="checkbox" checked={selText.bold} onChange={(e) => patchText(selText.id, { bold: e.target.checked })} />
                       {t9.bold}
                     </label>
+                    <div className="shbox">
                     <label className="chk">
                       <input type="checkbox" checked={selText.shadow !== false} onChange={(e) => patchText(selText.id, { shadow: e.target.checked })} />
                       {t9.shadow}
                     </label>
                     {selText.shadow !== false && (
                       <>
+                      
                         <div className="f">
                           <span>{t9.shadowColor}</span>
                           <ColorPick value={selText.shadowColor ?? '#000000'} onChange={(c) => patchText(selText.id, { shadowColor: c })} />
                         </div>
                         <label className="f">
                           <span>
+                            {t9.shadowBlur} ({Math.round((selText.shadowBlur ?? 0.12) * 100)})
+                          </span>
+                          <input type="range" min={0} max={1} step={0.02} value={selText.shadowBlur ?? 0.12} onChange={(e) => patchText(selText.id, { shadowBlur: Number(e.target.value) })} />
+                        </label>
+                        <label className="f">
+                          <span>
                             {t9.shadowAmt} ({Math.round((selText.shadowAmt ?? 1) * 100)})
                           </span>
                           <input type="range" min={0.2} max={3} step={0.1} value={selText.shadowAmt ?? 1} onChange={(e) => patchText(selText.id, { shadowAmt: Number(e.target.value) })} />
                         </label>
+                      
                       </>
                     )}
+                    </div>
                   </div>
                   <button className="ghost" onClick={() => patchText(selText.id, { x: 960, y: 540 })}>
                     {t9.resetPos}

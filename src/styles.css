@@ -397,7 +397,7 @@ body {
 
 .cpick { position: relative; }
 .cswatch { width: 56px; height: 32px; border: 2px solid var(--line); border-radius: 8px; cursor: pointer; padding: 0; }
-.cgrid { position: absolute; z-index: 50; top: 38px; inset-inline-start: 0; display: grid; grid-template-columns: repeat(8, 24px); gap: 2px; padding: 6px; background: #f0f0f0; border: 1px solid #888; box-shadow: 0 8px 20px rgba(0,0,0,.4); direction: ltr; }
+.cgrid { position: fixed; z-index: 300; display: grid; grid-template-columns: repeat(8, 24px); gap: 2px; padding: 6px; background: #f0f0f0; border: 1px solid #888; box-shadow: 0 8px 20px rgba(0,0,0,.4); direction: ltr; }
 .cgrid button { width: 24px; height: 22px; padding: 0; border: 1px solid #777; border-radius: 0; cursor: pointer; }
 .cgrid button.on { outline: 2px solid #000; outline-offset: 1px; }
 
@@ -440,3 +440,7 @@ footer.legal a:hover{text-decoration:underline}
 .thumbs li .dsec span{min-width:34px;text-align:center}
 .ctx .okrow{display:flex;gap:6px}.ctx .okrow button{flex:1}
 .msg{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:200;max-width:min(92vw,620px);box-shadow:0 8px 24px rgba(0,0,0,.35);cursor:pointer}
+.shbox{flex:1 1 100%;display:grid;gap:8px;padding-top:6px;border-top:1px solid var(--line)}
+.shbox .f{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.shbox .f input[type=range]{flex:1}
+.shbox{grid-column:1/-1;width:100%;box-sizing:border-box}.shbox .f{flex-direction:row!important}
