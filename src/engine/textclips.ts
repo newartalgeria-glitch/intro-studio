@@ -18,6 +18,15 @@ export interface TextClip {
   bold: boolean
   /** soft shadow under the text; missing = on (older projects) */
   shadow?: boolean
+  /** shadow colour (default black) and strength (default 1; bigger = longer, darker) */
+  shadowColor?: string
+  shadowAmt?: number
+}
+
+function hexA(h: string, a: number) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(h.trim())
+  const n = m ? parseInt(m[1], 16) : 0
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`
 }
 
 const isAr = (s: string) => /[؀-ۿ]/.test(s)
@@ -76,14 +85,19 @@ export function drawTexts(c: CanvasRenderingContext2D, t: number, clips: TextCli
     c.direction = isAr(k.text) ? 'rtl' : 'ltr'
     c.textAlign = 'center'
     c.textBaseline = 'middle'
-    if (k.shadow !== false) {
-      c.shadowColor = 'rgba(0,0,0,0.55)'
-      c.shadowBlur = k.size * 0.12
-      c.shadowOffsetY = k.size * 0.03
-    }
-    c.fillStyle = k.color
     const y0 = k.y - (lh * (lines.length - 1)) / 2
-    lines.forEach((l, i) => c.fillText(l, k.x, y0 + i * lh))
+    const paint = () => lines.forEach((l, i) => c.fillText(l, k.x, y0 + i * lh))
+    c.fillStyle = k.color
+    if (k.shadow !== false) {
+      const amt = k.shadowAmt ?? 1
+      c.shadowColor = hexA(k.shadowColor ?? '#000000', Math.min(1, 0.55 + 0.2 * (amt - 1)))
+      c.shadowBlur = k.size * 0.12 * amt
+      c.shadowOffsetY = k.size * 0.03 * amt
+      c.shadowOffsetX = k.size * 0.01 * amt
+      // a single pass of a soft shadow is faint: stack it for stronger settings
+      for (let n = amt > 1.8 ? 2 : 0; n > 0; n--) paint()
+    }
+    paint()
     c.restore()
   }
 }

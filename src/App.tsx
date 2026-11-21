@@ -321,7 +321,7 @@ export default function App() {
     if (dur - start < 3) start = Math.max(0, dur - 5)
     const len = Math.min(5, dur - start)
     setTexts((l) => {
-      const k: TextClip = { id, text: body, start, dur: len, track: 0, x: 960, y: 540, size: 110, font: defaultFont(body), color: '#ffffff', bold: true, shadow: true }
+      const k: TextClip = { id, text: body, start, dur: len, track: 0, x: 960, y: 540, size: 110, font: defaultFont(body), color: '#ffffff', bold: true, shadow: true, shadowAmt: 1.6 }
       let tr = 0
       while (l.some((o) => overlaps({ ...k, track: tr }, o))) tr++
       return [...l, { ...k, track: tr, y: 540 + [0, 150, -150, 300, -300][tr % 5] }]
@@ -748,6 +748,20 @@ export default function App() {
                       <input type="checkbox" checked={selText.shadow !== false} onChange={(e) => patchText(selText.id, { shadow: e.target.checked })} />
                       {t9.shadow}
                     </label>
+                    {selText.shadow !== false && (
+                      <>
+                        <div className="f">
+                          <span>{t9.shadowColor}</span>
+                          <ColorPick value={selText.shadowColor ?? '#000000'} onChange={(c) => patchText(selText.id, { shadowColor: c })} />
+                        </div>
+                        <label className="f">
+                          <span>
+                            {t9.shadowAmt} ({Math.round((selText.shadowAmt ?? 1) * 100)})
+                          </span>
+                          <input type="range" min={0.2} max={3} step={0.1} value={selText.shadowAmt ?? 1} onChange={(e) => patchText(selText.id, { shadowAmt: Number(e.target.value) })} />
+                        </label>
+                      </>
+                    )}
                   </div>
                   <button className="ghost" onClick={() => patchText(selText.id, { x: 960, y: 540 })}>
                     {t9.resetPos}
