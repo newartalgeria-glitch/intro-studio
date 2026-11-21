@@ -59,6 +59,7 @@ export async function askSaveLocation(name: string, ext: '.mp4' | '.nadiralbum')
       lastPickerError = 'dialog refused by the browser'
       return null
     }
+    lastPickerError = `${err?.name}: ${err?.message} (${Math.round(performance.now() - t0)} ms)`
     if (err?.name === 'AbortError' && /user aborted|cancel/i.test(err.message || '')) throw new Error('CANCEL')
     lastPickerError = `${err?.name}: ${err?.message}`
     return null

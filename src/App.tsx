@@ -517,7 +517,7 @@ export default function App() {
         handle = h === 'DIRECT' ? null : h
       } catch (e) {
         if ((e as Error)?.message === 'BUSY') return
-        setMsg({ type: 'err', text: t9.saveCancelled, saveDirect: true })
+        setMsg({ type: 'err', text: `${t9.saveCancelled} [${pickerError()}]`, saveDirect: true })
         return
       }
     }
@@ -626,7 +626,7 @@ export default function App() {
       } catch (e) {
         if ((e as Error)?.message === 'BUSY') return
         // offer a way out in case the dialog never showed up or was closed by mistake
-        setMsg({ type: 'err', text: t9.saveCancelled, retry: true })
+        setMsg({ type: 'err', text: `${t9.saveCancelled} [${pickerError()}]`, retry: true })
         return
       }
     }
