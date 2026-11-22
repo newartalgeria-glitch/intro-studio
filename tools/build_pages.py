@@ -536,6 +536,16 @@ G['music-for-event-videos.html'] = {
 }
 
 GUIDE_ORDER = ['make-wedding-intro-video.html', 'wedding-intro-structure-and-timing.html', 'prepare-photos-for-1080p-video.html', 'music-for-event-videos.html']
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from guides_more import GM, EXTRA
+for _slug, _per in EXTRA.items():
+    for _l in LANGS:
+        _t, _d, _s, _b = G[_slug][_l]
+        _i = _b.rfind('<a class="cta"')
+        G[_slug][_l] = (_t, _d, _s, _b[:_i] + _per[_l] + '\n' + _b[_i:])
+G.update(GM)
+GUIDE_ORDER += list(GM)
 GUIDES_TITLE = {'ar': ('أدلة صناعة فيديو المناسبات', 'شروحات عملية لصناعة مقدمة فيديو أنيقة للأعراس والمناسبات.'),
                 'fr': ('Guides pour vos vidéos d’événements', 'Des explications pratiques pour créer une belle introduction pour vos mariages et événements.'),
                 'en': ('Event video guides', 'Practical tutorials for creating an elegant opening for weddings and events.')}
