@@ -129,7 +129,7 @@ export default function App() {
   const [t, setT] = useState(0)
   const [undoN, setUndoN] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [quality, setQuality] = useState<'1080' | '720'>('1080')
+  const [quality, setQuality] = useState<'1080' | '720' | 'v1080'>('1080')
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(0)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string; retry?: boolean; escape?: boolean; saveDirect?: boolean } | null>(null)
@@ -641,15 +641,17 @@ export default function App() {
     } catch {
       /* optional */
     }
-    const h = quality === '1080' ? 1080 : 720
+    const vertical = quality === 'v1080'
+    const h = quality === '720' ? 720 : 1080
     try {
       const audio = music && aclips.length ? await mixdown(music, aclips, dur) : null
       const { blob, codec } = await exportMp4({
         audio,
         tpl,
         rc,
-        width: (h * 16) / 9,
-        height: h,
+        width: vertical ? 1080 : (h * 16) / 9,
+        height: vertical ? 1920 : h,
+        vertical,
         fps: 30,
         onProgress: setProgress,
         signal: abort.current.signal,
@@ -1309,9 +1311,10 @@ export default function App() {
               <button className="ico" onClick={removeSel} disabled={!sel} title={t9.delClip} aria-label={t9.delClip}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6" /></svg>
               </button>
-              <select value={quality} onChange={(e) => setQuality(e.target.value as '1080' | '720')} aria-label={t9.quality} title={t9.quality}>
+              <select value={quality} onChange={(e) => setQuality(e.target.value as '1080' | '720' | 'v1080')} aria-label={t9.quality} title={t9.quality}>
                 <option value="1080">1080p</option>
                 <option value="720">720p</option>
+                <option value="v1080">9:16 📱 1080×1920</option>
               </select>
               <button className="go" onClick={() => doExport()} disabled={!ready}>
                 {t9.export}

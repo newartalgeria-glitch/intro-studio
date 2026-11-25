@@ -18,6 +18,8 @@ export interface ExportOpts {
   rc: RenderCtx
   width: number
   height: number
+  /** 9:16 phone layout: the 16:9 picture is centred over a blurred copy of itself (width x height = 1080 x 1920) */
+  vertical?: boolean
   fps: number
   onProgress: (p: number) => void
   signal?: AbortSignal
@@ -70,7 +72,7 @@ async function pickAudio(rate: number) {
 export async function exportMp4(o: ExportOpts): Promise<{ blob: Blob; codec: string }> {
   if (!webCodecsAvailable()) throw new Error('NO_WEBCODECS')
   const { width, height, fps } = o
-  const bitrate = width >= 1920 ? 10_000_000 : 5_000_000
+  const bitrate = width >= 1920 || height >= 1920 ? 10_000_000 : 5_000_000
   const cand = await pickCodec(width, height, fps, bitrate)
   if (!cand) throw new Error('NO_ENCODER')
 
@@ -123,6 +125,15 @@ export async function exportMp4(o: ExportOpts): Promise<{ blob: Blob; codec: str
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
+  // vertical: draw the normal 16:9 frame (at width 1920) on a hidden canvas, then lay it out for portrait
+  const src = o.vertical ? document.createElement('canvas') : null
+  const tiny = o.vertical ? document.createElement('canvas') : null
+  if (src && tiny) {
+    src.width = 1920
+    src.height = Math.round((1920 * o.rc.H) / o.rc.W)
+    tiny.width = 54
+    tiny.height = 96
+  }
 
   for (let i = 0; i < total; i++) {
     if (o.signal?.aborted) {
@@ -131,7 +142,24 @@ export async function exportMp4(o: ExportOpts): Promise<{ blob: Blob; codec: str
     }
     if (failure) throw failure
     if (o.rc.mclips.length) await prepareMedia(o.rc.mclips, i / fps)
-    renderFrame(canvas, o.tpl, o.rc, i / fps)
+    if (src && tiny) {
+      renderFrame(src, o.tpl, o.rc, i / fps)
+      const tc = tiny.getContext('2d')!
+      const cover = Math.max(tiny.width / src.width, tiny.height / src.height)
+      const tw = src.width * cover
+      const th = src.height * cover
+      tc.drawImage(src, (tiny.width - tw) / 2, (tiny.height - th) / 2, tw, th)
+      const c = canvas.getContext('2d')!
+      c.imageSmoothingEnabled = true
+      c.imageSmoothingQuality = 'high'
+      c.drawImage(tiny, 0, 0, width, height)
+      c.fillStyle = 'rgba(0,0,0,0.35)'
+      c.fillRect(0, 0, width, height)
+      const fh = Math.round((width * src.height) / src.width)
+      c.drawImage(src, 0, Math.round((height - fh) / 2), width, fh)
+    } else {
+      renderFrame(canvas, o.tpl, o.rc, i / fps)
+    }
     const frame = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / fps), duration: Math.round(1e6 / fps) })
     encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 })
     frame.close()
