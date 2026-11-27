@@ -444,3 +444,6 @@ footer.legal a:hover{text-decoration:underline}
 .shbox .f{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .shbox .f input[type=range]{flex:1}
 .shbox{grid-column:1/-1;width:100%;box-sizing:border-box}.shbox .f{flex-direction:row!important}
+
+.vcrop { position: absolute; border: 3px solid #ffd400; box-sizing: border-box; cursor: grab; touch-action: none; box-shadow: 0 0 0 9999px rgba(0,0,0,.5); z-index: 5; }
+.vcrop:active { cursor: grabbing; }

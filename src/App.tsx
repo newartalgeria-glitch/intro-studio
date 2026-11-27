@@ -130,6 +130,7 @@ export default function App() {
   const [undoN, setUndoN] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [quality, setQuality] = useState<'1080' | '720' | 'v1080'>('1080')
+  const [vc, setVc] = useState({ x: 0.5, y: 0.5, z: 1 })
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(0)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string; retry?: boolean; escape?: boolean; saveDirect?: boolean } | null>(null)
@@ -652,6 +653,7 @@ export default function App() {
         width: vertical ? 1080 : (h * 16) / 9,
         height: vertical ? 1920 : h,
         vertical,
+        vcrop: vc,
         fps: 30,
         onProgress: setProgress,
         signal: abort.current.signal,
@@ -1252,6 +1254,40 @@ export default function App() {
                   )
                 })}
             </div>
+            {quality === 'v1080' && (() => {
+              const wh = 1 / vc.z
+              const ww = wh * (81 / 256)
+              const cx = Math.min(Math.max(vc.x, ww / 2), 1 - ww / 2)
+              const cy = Math.min(Math.max(vc.y, wh / 2), 1 - wh / 2)
+              return (
+                <div
+                  className="vcrop"
+                  style={{ left: `${(cx - ww / 2) * 100}%`, top: `${(cy - wh / 2) * 100}%`, width: `${ww * 100}%`, height: `${wh * 100}%` }}
+                  title={t9.vcReset}
+                  onDoubleClick={() => setVc((v) => ({ ...v, x: 0.5, y: 0.5 }))}
+                  onPointerDown={(e) => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    const box = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect()
+                    const sx = e.clientX
+                    const sy = e.clientY
+                    const x0 = cx
+                    const y0 = cy
+                    const mv = (m: PointerEvent) => {
+                      const nx = Math.min(Math.max(x0 + (m.clientX - sx) / box.width, ww / 2), 1 - ww / 2)
+                      const ny = Math.min(Math.max(y0 + (m.clientY - sy) / box.height, wh / 2), 1 - wh / 2)
+                      setVc((v) => ({ ...v, x: nx, y: ny }))
+                    }
+                    const up = () => {
+                      window.removeEventListener('pointermove', mv)
+                      window.removeEventListener('pointerup', up)
+                    }
+                    window.addEventListener('pointermove', mv)
+                    window.addEventListener('pointerup', up)
+                  }}
+                />
+              )
+            })()}
             {!ready && <div className="loading">{t9.loadingFonts}</div>}
           </div>
           <div className="tools dock">
@@ -1316,6 +1352,14 @@ export default function App() {
                 <option value="720">720p</option>
                 <option value="v1080">9:16 📱 1080×1920</option>
               </select>
+              {quality === 'v1080' && (
+                <>
+                  <input type="range" min={1} max={2} step={0.05} value={vc.z} onChange={(e) => setVc((v) => ({ ...v, z: Number(e.target.value) }))} aria-label={t9.vcZoom} title={t9.vcZoom} style={{ width: 80 }} />
+                  <button className="ico" onClick={() => setVc({ x: 0.5, y: 0.5, z: 1 })} title={t9.vcReset} aria-label={t9.vcReset}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></svg>
+                  </button>
+                </>
+              )}
               <button className="go" onClick={() => doExport()} disabled={!ready}>
                 {t9.export}
               </button>

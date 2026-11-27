@@ -18,8 +18,10 @@ export interface ExportOpts {
   rc: RenderCtx
   width: number
   height: number
-  /** 9:16 phone layout: the 16:9 picture is centred over a blurred copy of itself (width x height = 1080 x 1920) */
+  /** 9:16 phone layout: a 9:16 window of the 16:9 picture is cut out and fills the frame (1080 x 1920) */
   vertical?: boolean
+  /** window position (centre, 0..1 of the source) and zoom (1 = full height, up to 2) */
+  vcrop?: { x: number; y: number; z: number }
   fps: number
   onProgress: (p: number) => void
   signal?: AbortSignal
@@ -125,14 +127,18 @@ export async function exportMp4(o: ExportOpts): Promise<{ blob: Blob; codec: str
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
-  // vertical: draw the normal 16:9 frame (at width 1920) on a hidden canvas, then lay it out for portrait
+  // vertical: draw the 16:9 frame large enough that the cut-out window is rendered 1:1, then crop it
+  const vc = o.vcrop ?? { x: 0.5, y: 0.5, z: 1 }
   const src = o.vertical ? document.createElement('canvas') : null
-  const tiny = o.vertical ? document.createElement('canvas') : null
-  if (src && tiny) {
-    src.width = 1920
-    src.height = Math.round((1920 * o.rc.H) / o.rc.W)
-    tiny.width = 54
-    tiny.height = 96
+  let win = { sx: 0, sy: 0, sw: 0, sh: 0 }
+  if (src) {
+    src.height = Math.min(Math.round(1920 * vc.z), 2880)
+    src.width = Math.round((src.height * o.rc.W) / o.rc.H)
+    const wh = 1 / vc.z
+    const ww = wh * (9 / 16) * (o.rc.H / o.rc.W)
+    const cx = Math.min(Math.max(vc.x, ww / 2), 1 - ww / 2)
+    const cy = Math.min(Math.max(vc.y, wh / 2), 1 - wh / 2)
+    win = { sx: (cx - ww / 2) * src.width, sy: (cy - wh / 2) * src.height, sw: ww * src.width, sh: wh * src.height }
   }
 
   for (let i = 0; i < total; i++) {
@@ -142,21 +148,12 @@ export async function exportMp4(o: ExportOpts): Promise<{ blob: Blob; codec: str
     }
     if (failure) throw failure
     if (o.rc.mclips.length) await prepareMedia(o.rc.mclips, i / fps)
-    if (src && tiny) {
+    if (src) {
       renderFrame(src, o.tpl, o.rc, i / fps)
-      const tc = tiny.getContext('2d')!
-      const cover = Math.max(tiny.width / src.width, tiny.height / src.height)
-      const tw = src.width * cover
-      const th = src.height * cover
-      tc.drawImage(src, (tiny.width - tw) / 2, (tiny.height - th) / 2, tw, th)
       const c = canvas.getContext('2d')!
       c.imageSmoothingEnabled = true
       c.imageSmoothingQuality = 'high'
-      c.drawImage(tiny, 0, 0, width, height)
-      c.fillStyle = 'rgba(0,0,0,0.35)'
-      c.fillRect(0, 0, width, height)
-      const fh = Math.round((width * src.height) / src.width)
-      c.drawImage(src, 0, Math.round((height - fh) / 2), width, fh)
+      c.drawImage(src, win.sx, win.sy, win.sw, win.sh, 0, 0, width, height)
     } else {
       renderFrame(canvas, o.tpl, o.rc, i / fps)
     }
